@@ -10,6 +10,21 @@
   --color-primary-card: #141414;
   --color-primary-hover: #1A1A1A;
 
+  /* Studio dashboard colors */
+  --color-studio-black: #0A0A0A;
+  --color-studio-card: #141414;
+  --color-studio-cream: #F5F5F5;
+
+  /* Admin dashboard colors */
+  --color-admin-black: #0A0A0A;
+  --color-admin-card: #111111;
+  --color-admin-cream: #F5F5F5;
+
+  /* Gold colors */
+  --color-gold: #D4AF37;
+  --color-gold-dark: #B8962E;
+  --color-gold-light: #E5C158;
+
   /* Accent colors */
   --color-accent-gold: #D4AF37;
   --color-accent-gold-hover: #E5C158;

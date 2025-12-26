@@ -248,20 +248,8 @@ const uniqueStatuses = [...new Set(orders.map(o => o.status))];
 </DashboardLayout>
 
 <style>
-  :root {
-    --studio-black: #0A0A0A;
-    --studio-card: #141414;
-    --studio-cream: #F5F5F5;
-    --gold: #D4AF37;
-    --gold-dark: #B8962E;
-  }
+  @reference "../../../styles/global.css";
 
-  .bg-studio-black { background-color: var(--studio-black); }
-  .bg-studio-card { background-color: var(--studio-card); }
-  .text-studio-cream { color: var(--studio-cream); }
-  .text-gold { color: var(--gold); }
-  .bg-gold { background-color: var(--gold); }
-  .border-gold { border-color: var(--gold); }
   .font-display { font-family: 'Playfair Display', serif; }
 
   .status-badge {

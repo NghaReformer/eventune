@@ -362,20 +362,8 @@ const isPaid = order.payment_status === 'paid';
 </DashboardLayout>
 
 <style>
-  :root {
-    --studio-black: #0A0A0A;
-    --studio-card: #141414;
-    --studio-cream: #F5F5F5;
-    --gold: #D4AF37;
-    --gold-dark: #B8962E;
-  }
+  @reference "../../../styles/global.css";
 
-  .bg-studio-black { background-color: var(--studio-black); }
-  .bg-studio-card { background-color: var(--studio-card); }
-  .text-studio-cream { color: var(--studio-cream); }
-  .text-gold { color: var(--gold); }
-  .bg-gold { background-color: var(--gold); }
-  .border-gold { border-color: var(--gold); }
   .font-display { font-family: 'Playfair Display', serif; }
 
   .order-card {
@@ -481,38 +469,38 @@ const isPaid = order.payment_status === 'paid';
   }
 
   .timeline-dot.active {
-    @apply ring-4 ring-opacity-20;
+    @apply ring-4;
   }
 
   .dot-amber { @apply border-amber-400; }
-  .dot-amber.active { @apply bg-amber-400 ring-amber-400; }
+  .dot-amber.active { @apply bg-amber-400 ring-amber-400/20; }
 
   .dot-emerald { @apply border-emerald-400; }
-  .dot-emerald.active { @apply bg-emerald-400 ring-emerald-400; }
+  .dot-emerald.active { @apply bg-emerald-400 ring-emerald-400/20; }
 
   .dot-blue { @apply border-blue-400; }
-  .dot-blue.active { @apply bg-blue-400 ring-blue-400; }
+  .dot-blue.active { @apply bg-blue-400 ring-blue-400/20; }
 
   .dot-purple { @apply border-purple-400; }
-  .dot-purple.active { @apply bg-purple-400 ring-purple-400; }
+  .dot-purple.active { @apply bg-purple-400 ring-purple-400/20; }
 
   .dot-indigo { @apply border-indigo-400; }
-  .dot-indigo.active { @apply bg-indigo-400 ring-indigo-400; }
+  .dot-indigo.active { @apply bg-indigo-400 ring-indigo-400/20; }
 
   .dot-cyan { @apply border-cyan-400; }
-  .dot-cyan.active { @apply bg-cyan-400 ring-cyan-400; }
+  .dot-cyan.active { @apply bg-cyan-400 ring-cyan-400/20; }
 
   .dot-orange { @apply border-orange-400; }
-  .dot-orange.active { @apply bg-orange-400 ring-orange-400; }
+  .dot-orange.active { @apply bg-orange-400 ring-orange-400/20; }
 
   .dot-gold { @apply border-gold; }
-  .dot-gold.active { @apply bg-gold ring-gold; }
+  .dot-gold.active { @apply bg-gold ring-gold/20; }
 
   .dot-red { @apply border-red-400; }
-  .dot-red.active { @apply bg-red-400 ring-red-400; }
+  .dot-red.active { @apply bg-red-400 ring-red-400/20; }
 
   .dot-gray { @apply border-gray-400; }
-  .dot-gray.active { @apply bg-gray-400 ring-gray-400; }
+  .dot-gray.active { @apply bg-gray-400 ring-gray-400/20; }
 
   .timeline-line {
     @apply absolute left-[7px] top-4 bottom-0 w-0.5 bg-gold/20;

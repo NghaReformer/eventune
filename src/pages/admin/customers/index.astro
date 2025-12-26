@@ -83,6 +83,27 @@ function getSortIcon(field: string): string {
   if (sortBy !== field) return 'neutral';
   return sortOrder === 'asc' ? 'asc' : 'desc';
 }
+
+// Compute pagination numbers (moved out of JSX to avoid Astro parser issues)
+function getPaginationNumbers(): number[] {
+  const maxVisible = Math.min(5, totalPages);
+  const numbers: number[] = [];
+  for (let i = 0; i < maxVisible; i++) {
+    let pageNum: number;
+    if (totalPages <= 5) {
+      pageNum = i + 1;
+    } else if (page <= 3) {
+      pageNum = i + 1;
+    } else if (page >= totalPages - 2) {
+      pageNum = totalPages - 4 + i;
+    } else {
+      pageNum = page - 2 + i;
+    }
+    numbers.push(pageNum);
+  }
+  return numbers;
+}
+const paginationNumbers = getPaginationNumbers();
 ---
 
 <AdminLayout title="Customers" activeNav="customers">
@@ -246,26 +267,14 @@ function getSortIcon(field: string): string {
           )}
 
           <div class="page-numbers">
-            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-              let pageNum;
-              if (totalPages <= 5) {
-                pageNum = i + 1;
-              } else if (page <= 3) {
-                pageNum = i + 1;
-              } else if (page >= totalPages - 2) {
-                pageNum = totalPages - 4 + i;
-              } else {
-                pageNum = page - 2 + i;
-              }
-              return (
-                <a
-                  href={`?page=${pageNum}&search=${search}&has_orders=${hasOrders || ''}&sort_by=${sortBy}&sort_order=${sortOrder}`}
-                  class:list={['page-number', page === pageNum && 'active']}
-                >
-                  {pageNum}
-                </a>
-              );
-            })}
+            {paginationNumbers.map((pageNum) => (
+              <a
+                href={`?page=${pageNum}&search=${search}&has_orders=${hasOrders || ''}&sort_by=${sortBy}&sort_order=${sortOrder}`}
+                class:list={['page-number', page === pageNum && 'active']}
+              >
+                {pageNum}
+              </a>
+            ))}
           </div>
 
           {page < totalPages && (
