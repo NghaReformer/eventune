@@ -1,0 +1,318 @@
+---
+/**
+ * Order History Page
+ * Filterable list of all customer orders
+ *
+ * Security: Uses session from layout, server-side data fetching
+ */
+import DashboardLayout from '../../../layouts/DashboardLayout.astro';
+import { getServerClient } from '../../../lib/supabase/server';
+import type { SessionData } from '../../../lib/auth/session';
+
+// Get session from layout (already validated)
+const session = Astro.locals.session as SessionData | undefined;
+
+if (!session) {
+  return Astro.redirect('/auth/login?redirect=/dashboard/orders');
+}
+
+const { user } = session;
+
+// Fetch orders using server client
+const supabase = getServerClient();
+let orders: any[] = [];
+let fetchError: string | null = null;
+
+try {
+  const { data: ordersData, error } = await supabase
+    .from('orders')
+    .select('*')
+    .eq('customer_id', user.id)
+    .order('created_at', { ascending: false })
+    .limit(100); // Pagination for performance
+
+  if (error) {
+    console.error('Error fetching orders:', error);
+    fetchError = 'Unable to load orders. Please refresh the page.';
+  } else {
+    orders = ordersData || [];
+  }
+} catch (err) {
+  console.error('Orders fetch error:', err);
+  fetchError = 'Something went wrong. Please try again.';
+}
+
+// Status configurations
+const statusConfig: Record<string, { label: string; bg: string; text: string; dot: string }> = {
+  pending: { label: 'Pending', bg: 'bg-amber-500/10', text: 'text-amber-400', dot: 'bg-amber-400' },
+  payment_pending: { label: 'Payment Pending', bg: 'bg-amber-500/10', text: 'text-amber-400', dot: 'bg-amber-400' },
+  paid: { label: 'Paid', bg: 'bg-emerald-500/10', text: 'text-emerald-400', dot: 'bg-emerald-400' },
+  in_progress: { label: 'In Progress', bg: 'bg-blue-500/10', text: 'text-blue-400', dot: 'bg-blue-400' },
+  composing: { label: 'Composing', bg: 'bg-blue-500/10', text: 'text-blue-400', dot: 'bg-blue-400' },
+  recording: { label: 'Recording', bg: 'bg-purple-500/10', text: 'text-purple-400', dot: 'bg-purple-400' },
+  mixing: { label: 'Mixing', bg: 'bg-indigo-500/10', text: 'text-indigo-400', dot: 'bg-indigo-400' },
+  review: { label: 'In Review', bg: 'bg-cyan-500/10', text: 'text-cyan-400', dot: 'bg-cyan-400' },
+  revision: { label: 'Revision', bg: 'bg-orange-500/10', text: 'text-orange-400', dot: 'bg-orange-400' },
+  completed: { label: 'Completed', bg: 'bg-emerald-500/10', text: 'text-emerald-400', dot: 'bg-emerald-400' },
+  delivered: { label: 'Delivered', bg: 'bg-gold/10', text: 'text-gold', dot: 'bg-gold' },
+  cancelled: { label: 'Cancelled', bg: 'bg-red-500/10', text: 'text-red-400', dot: 'bg-red-400' },
+  refunded: { label: 'Refunded', bg: 'bg-gray-500/10', text: 'text-gray-400', dot: 'bg-gray-400' },
+};
+
+function getStatusConfig(status: string) {
+  return statusConfig[status] || { label: status, bg: 'bg-gray-500/10', text: 'text-gray-400', dot: 'bg-gray-400' };
+}
+
+function formatDate(date: string) {
+  return new Date(date).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  });
+}
+
+function formatCurrency(amount: number, currency: string) {
+  if (currency === 'XAF') {
+    return `${amount.toLocaleString()} XAF`;
+  }
+  return `$${amount}`;
+}
+
+function formatOccasion(slug: string | null) {
+  if (!slug) return 'Custom Song';
+  return slug.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+}
+
+function formatPackage(slug: string | null) {
+  if (!slug) return 'Standard';
+  return slug.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+}
+
+// Get unique statuses for filter
+const uniqueStatuses = [...new Set(orders.map(o => o.status))];
+---
+
+<DashboardLayout title="My Orders" activeNav="orders">
+  <!-- Header with filter -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+    <p class="text-studio-cream/60">
+      {orders.length} order{orders.length !== 1 ? 's' : ''} total
+    </p>
+
+    <!-- Filter Dropdown -->
+    <div class="relative">
+      <select
+        id="status-filter"
+        class="appearance-none bg-studio-card border border-gold/20 text-studio-cream px-4 py-2 pr-10 rounded-lg focus:outline-none focus:border-gold/50 transition-colors cursor-pointer"
+      >
+        <option value="all">All Statuses</option>
+        {uniqueStatuses.map((status) => (
+          <option value={status}>{getStatusConfig(status).label}</option>
+        ))}
+      </select>
+      <svg class="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gold pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+      </svg>
+    </div>
+  </div>
+
+  {orders.length === 0 ? (
+    <!-- Empty State -->
+    <div class="empty-state">
+      <div class="empty-icon">
+        <svg class="w-16 h-16 text-gold/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+        </svg>
+      </div>
+      <h4 class="text-lg font-display text-studio-cream mb-2">No orders yet</h4>
+      <p class="text-studio-cream/50 mb-6 max-w-md">
+        Your order history will appear here once you create your first personalized song.
+      </p>
+      <a
+        href="/services"
+        class="inline-flex items-center gap-2 px-6 py-3 bg-gold text-studio-black font-semibold rounded-lg hover:bg-gold-dark transition-colors"
+      >
+        Start Your First Order
+      </a>
+    </div>
+  ) : (
+    <!-- Orders Table (Desktop) -->
+    <div class="hidden lg:block overflow-hidden rounded-xl border border-gold/10">
+      <table class="w-full">
+        <thead class="bg-studio-card border-b border-gold/10">
+          <tr>
+            <th class="text-left px-6 py-4 text-sm font-medium text-studio-cream/50 uppercase tracking-wider">Order</th>
+            <th class="text-left px-6 py-4 text-sm font-medium text-studio-cream/50 uppercase tracking-wider">Details</th>
+            <th class="text-left px-6 py-4 text-sm font-medium text-studio-cream/50 uppercase tracking-wider">Status</th>
+            <th class="text-left px-6 py-4 text-sm font-medium text-studio-cream/50 uppercase tracking-wider">Amount</th>
+            <th class="text-left px-6 py-4 text-sm font-medium text-studio-cream/50 uppercase tracking-wider">Date</th>
+            <th class="px-6 py-4"></th>
+          </tr>
+        </thead>
+        <tbody id="orders-table-body" class="divide-y divide-gold/5">
+          {orders.map((order) => {
+            const config = getStatusConfig(order.status);
+            return (
+              <tr class="order-row bg-studio-black hover:bg-studio-card/50 transition-colors" data-status={order.status}>
+                <td class="px-6 py-5">
+                  <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-lg bg-gold/10 flex items-center justify-center flex-shrink-0">
+                      <svg class="w-5 h-5 text-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                      </svg>
+                    </div>
+                    <span class="font-mono text-sm text-gold">{order.order_number}</span>
+                  </div>
+                </td>
+                <td class="px-6 py-5">
+                  <p class="text-studio-cream">{formatOccasion(order.occasion_slug)}</p>
+                  <p class="text-sm text-studio-cream/50">{formatPackage(order.package_slug)} Package</p>
+                </td>
+                <td class="px-6 py-5">
+                  <span class={`status-badge ${config.bg} ${config.text}`}>
+                    <span class={`w-1.5 h-1.5 rounded-full ${config.dot}`}></span>
+                    {config.label}
+                  </span>
+                </td>
+                <td class="px-6 py-5">
+                  <span class="font-semibold text-studio-cream">{formatCurrency(order.amount_expected, order.currency)}</span>
+                </td>
+                <td class="px-6 py-5 text-studio-cream/60">
+                  {formatDate(order.created_at)}
+                </td>
+                <td class="px-6 py-5">
+                  <a
+                    href={`/dashboard/orders/${order.id}`}
+                    class="inline-flex items-center gap-1 text-gold hover:text-gold-dark transition-colors"
+                  >
+                    View
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </a>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Orders Cards (Mobile) -->
+    <div id="orders-cards" class="lg:hidden space-y-4">
+      {orders.map((order) => {
+        const config = getStatusConfig(order.status);
+        return (
+          <a
+            href={`/dashboard/orders/${order.id}`}
+            class="order-card-mobile block"
+            data-status={order.status}
+          >
+            <div class="flex items-start justify-between mb-3">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-gold/10 flex items-center justify-center">
+                  <svg class="w-5 h-5 text-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                  </svg>
+                </div>
+                <div>
+                  <span class="font-mono text-sm text-gold">{order.order_number}</span>
+                  <p class="text-studio-cream">{formatOccasion(order.occasion_slug)}</p>
+                </div>
+              </div>
+              <span class={`status-badge ${config.bg} ${config.text}`}>
+                <span class={`w-1.5 h-1.5 rounded-full ${config.dot}`}></span>
+                {config.label}
+              </span>
+            </div>
+
+            <div class="flex items-center justify-between text-sm">
+              <span class="text-studio-cream/50">{formatPackage(order.package_slug)} Package</span>
+              <span class="font-semibold text-studio-cream">{formatCurrency(order.amount_expected, order.currency)}</span>
+            </div>
+
+            <div class="flex items-center justify-between mt-3 pt-3 border-t border-gold/10 text-sm">
+              <span class="text-studio-cream/50">{formatDate(order.created_at)}</span>
+              <span class="text-gold flex items-center gap-1">
+                View Details
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+              </span>
+            </div>
+          </a>
+        );
+      })}
+    </div>
+  )}
+</DashboardLayout>
+
+<style>
+  :root {
+    --studio-black: #0A0A0A;
+    --studio-card: #141414;
+    --studio-cream: #F5F5F5;
+    --gold: #D4AF37;
+    --gold-dark: #B8962E;
+  }
+
+  .bg-studio-black { background-color: var(--studio-black); }
+  .bg-studio-card { background-color: var(--studio-card); }
+  .text-studio-cream { color: var(--studio-cream); }
+  .text-gold { color: var(--gold); }
+  .bg-gold { background-color: var(--gold); }
+  .border-gold { border-color: var(--gold); }
+  .font-display { font-family: 'Playfair Display', serif; }
+
+  .status-badge {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium uppercase tracking-wider;
+  }
+
+  .empty-state {
+    @apply flex flex-col items-center justify-center text-center py-16 px-6;
+    @apply bg-studio-card border border-dashed border-gold/20 rounded-xl;
+  }
+
+  .empty-icon {
+    @apply w-24 h-24 rounded-full bg-gold/5 flex items-center justify-center mb-6;
+  }
+
+  .order-card-mobile {
+    @apply bg-studio-card border border-gold/10 rounded-xl p-5;
+    @apply hover:border-gold/30 transition-all duration-300;
+  }
+
+  select option {
+    background-color: var(--studio-card);
+    color: var(--studio-cream);
+  }
+</style>
+
+<script>
+  // Filter functionality
+  const filter = document.getElementById('status-filter') as HTMLSelectElement;
+  const tableRows = document.querySelectorAll('.order-row');
+  const cards = document.querySelectorAll('.order-card-mobile');
+
+  filter?.addEventListener('change', () => {
+    const status = filter.value;
+
+    tableRows.forEach((row) => {
+      const rowStatus = (row as HTMLElement).dataset.status;
+      if (status === 'all' || rowStatus === status) {
+        (row as HTMLElement).style.display = '';
+      } else {
+        (row as HTMLElement).style.display = 'none';
+      }
+    });
+
+    cards.forEach((card) => {
+      const cardStatus = (card as HTMLElement).dataset.status;
+      if (status === 'all' || cardStatus === status) {
+        (card as HTMLElement).style.display = '';
+      } else {
+        (card as HTMLElement).style.display = 'none';
+      }
+    });
+  });
+</script>

@@ -1,0 +1,1365 @@
+---
+/**
+ * Admin Order Detail Page
+ * Full order info, status management, notes, questionnaire
+ *
+ * Security: Admin role required, audit logging
+ */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { getOrderById, getCustomerById } from '../../../services/admin.service';
+import { hasPermission } from '../../../lib/auth/admin-session';
+import { isValidUUID } from '../../../lib/security/validation';
+import type { AdminSessionData } from '../../../lib/auth/admin-session';
+
+const { id } = Astro.params;
+
+// Validate UUID
+if (!id || !isValidUUID(id)) {
+  return Astro.redirect('/admin/orders');
+}
+
+// Get admin session
+const adminSession = Astro.locals.adminSession as AdminSessionData;
+const csrfToken = Astro.locals.csrfToken as string;
+const { permissions, adminRole } = adminSession;
+
+// Fetch order data
+const orderData = await getOrderById(id);
+
+if (!orderData) {
+  return Astro.redirect('/admin/orders');
+}
+
+const { order, statusHistory, questionnaire, notes } = orderData;
+
+// Fetch customer
+const customer = order.customer_id ? await getCustomerById(order.customer_id) : null;
+
+// Permissions
+const canUpdateStatus = hasPermission(permissions, 'orders:update');
+const canRefund = hasPermission(permissions, 'orders:refund');
+
+// Status options for dropdown
+const statusOptions = [
+  { value: 'pending', label: 'Pending', color: 'amber' },
+  { value: 'payment_pending', label: 'Payment Pending', color: 'amber' },
+  { value: 'paid', label: 'Paid', color: 'emerald' },
+  { value: 'in_progress', label: 'In Progress', color: 'blue' },
+  { value: 'composing', label: 'Composing', color: 'blue' },
+  { value: 'recording', label: 'Recording', color: 'purple' },
+  { value: 'mixing', label: 'Mixing', color: 'indigo' },
+  { value: 'review', label: 'In Review', color: 'cyan' },
+  { value: 'revision', label: 'Revision', color: 'orange' },
+  { value: 'completed', label: 'Completed', color: 'emerald' },
+  { value: 'delivered', label: 'Delivered', color: 'gold' },
+  { value: 'cancelled', label: 'Cancelled', color: 'red' },
+];
+
+// Status colors
+const statusColors: Record<string, { bg: string; text: string; dot: string; border: string }> = {
+  pending: { bg: 'bg-amber-500/10', text: 'text-amber-400', dot: 'bg-amber-400', border: 'border-amber-400/30' },
+  payment_pending: { bg: 'bg-amber-500/10', text: 'text-amber-400', dot: 'bg-amber-400', border: 'border-amber-400/30' },
+  paid: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', dot: 'bg-emerald-400', border: 'border-emerald-400/30' },
+  in_progress: { bg: 'bg-blue-500/10', text: 'text-blue-400', dot: 'bg-blue-400', border: 'border-blue-400/30' },
+  composing: { bg: 'bg-blue-500/10', text: 'text-blue-400', dot: 'bg-blue-400', border: 'border-blue-400/30' },
+  recording: { bg: 'bg-purple-500/10', text: 'text-purple-400', dot: 'bg-purple-400', border: 'border-purple-400/30' },
+  mixing: { bg: 'bg-indigo-500/10', text: 'text-indigo-400', dot: 'bg-indigo-400', border: 'border-indigo-400/30' },
+  review: { bg: 'bg-cyan-500/10', text: 'text-cyan-400', dot: 'bg-cyan-400', border: 'border-cyan-400/30' },
+  revision: { bg: 'bg-orange-500/10', text: 'text-orange-400', dot: 'bg-orange-400', border: 'border-orange-400/30' },
+  completed: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', dot: 'bg-emerald-400', border: 'border-emerald-400/30' },
+  delivered: { bg: 'bg-gold/10', text: 'text-gold', dot: 'bg-gold', border: 'border-gold/30' },
+  cancelled: { bg: 'bg-red-500/10', text: 'text-red-400', dot: 'bg-red-400', border: 'border-red-400/30' },
+};
+
+function getStatusColor(s: string) {
+  return statusColors[s] || statusColors.pending;
+}
+
+function formatCurrency(amount: number, currency: string) {
+  if (currency === 'XAF') {
+    return `${amount.toLocaleString()} XAF`;
+  }
+  return `$${amount.toFixed(2)}`;
+}
+
+function formatDate(date: string) {
+  return new Date(date).toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function formatDateTime(date: string) {
+  return new Date(date).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+const currentColors = getStatusColor(order.status);
+const isPaid = order.payment_status === 'paid';
+---
+
+<AdminLayout title={`Order ${order.order_number}`} activeNav="orders">
+  <!-- Back Link -->
+  <a href="/admin/orders" class="back-link">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+    </svg>
+    Back to Orders
+  </a>
+
+  <!-- Order Header -->
+  <div class="order-header">
+    <div class="order-header-main">
+      <div class="flex items-center gap-4 flex-wrap">
+        <h2 class="order-number-lg">{order.order_number}</h2>
+        <span class={`status-badge-lg ${currentColors.bg} ${currentColors.text} ${currentColors.border}`}>
+          <span class={`status-dot ${currentColors.dot}`}></span>
+          {order.status.replace(/_/g, ' ')}
+        </span>
+        {isPaid && (
+          <span class="payment-verified">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Paid
+          </span>
+        )}
+      </div>
+      <p class="order-date">Created {formatDate(order.created_at)}</p>
+    </div>
+    <div class="order-header-actions">
+      {canUpdateStatus && (
+        <div class="status-dropdown">
+          <button id="status-dropdown-btn" class="status-dropdown-btn">
+            Change Status
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          <div id="status-dropdown-menu" class="status-dropdown-menu">
+            {statusOptions.map((opt) => (
+              <button
+                class="status-option"
+                data-status={opt.value}
+                disabled={opt.value === order.status}
+              >
+                <span class={`status-option-dot bg-${opt.color}-400`}></span>
+                {opt.label}
+                {opt.value === order.status && (
+                  <svg class="w-4 h-4 ml-auto text-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {canRefund && isPaid && order.status !== 'refunded' && (
+        <button id="refund-btn" class="refund-btn">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+          </svg>
+          Refund
+        </button>
+      )}
+    </div>
+  </div>
+
+  <div class="grid lg:grid-cols-3 gap-6">
+    <!-- Main Content -->
+    <div class="lg:col-span-2 space-y-6">
+      <!-- Order Details Card -->
+      <div class="detail-card">
+        <h3 class="card-title">Order Details</h3>
+        <div class="detail-grid">
+          <div class="detail-item">
+            <span class="detail-label">Package</span>
+            <span class="detail-value package">{order.package_slug?.replace(/-/g, ' ') || 'N/A'}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Occasion</span>
+            <span class="detail-value">{order.occasion_slug?.replace(/-/g, ' ') || 'N/A'}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Amount</span>
+            <span class="detail-value amount">{formatCurrency(order.amount_expected, order.currency)}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Amount Paid</span>
+            <span class="detail-value">{formatCurrency(order.amount_paid || 0, order.currency)}</span>
+          </div>
+          {order.due_date && (
+            <div class="detail-item">
+              <span class="detail-label">Due Date</span>
+              <span class="detail-value">{formatDate(order.due_date)}</span>
+            </div>
+          )}
+          {order.delivered_at && (
+            <div class="detail-item">
+              <span class="detail-label">Delivered</span>
+              <span class="detail-value">{formatDate(order.delivered_at)}</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <!-- Status Timeline -->
+      <div class="detail-card">
+        <h3 class="card-title">Status Timeline</h3>
+        {statusHistory.length === 0 ? (
+          <p class="empty-text">No status updates yet</p>
+        ) : (
+          <div class="timeline">
+            {statusHistory.map((event, index) => {
+              const colors = getStatusColor(event.status);
+              const isLast = index === statusHistory.length - 1;
+              return (
+                <div class="timeline-item">
+                  <div class={`timeline-dot ${isLast ? 'active' : ''} ${colors.dot.replace('bg-', 'dot-')}`}>
+                    {isLast && <span class="timeline-pulse"></span>}
+                  </div>
+                  {!isLast && <div class="timeline-line"></div>}
+                  <div class="timeline-content">
+                    <span class={`timeline-status ${colors.text}`}>{event.status.replace(/_/g, ' ')}</span>
+                    {event.note && <p class="timeline-note">{event.note}</p>}
+                    <span class="timeline-date">{formatDateTime(event.created_at)}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <!-- Internal Notes -->
+      <div class="detail-card">
+        <div class="card-header">
+          <h3 class="card-title">Internal Notes</h3>
+          <span class="notes-count">{notes.length}</span>
+        </div>
+
+        <!-- Add Note Form -->
+        <form id="add-note-form" class="add-note-form">
+          <input type="hidden" name="csrf_token" value={csrfToken} />
+          <input type="hidden" name="order_id" value={order.id} />
+          <textarea
+            name="note"
+            placeholder="Add an internal note..."
+            class="note-input"
+            rows={3}
+          ></textarea>
+          <button type="submit" class="add-note-btn">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            </svg>
+            Add Note
+          </button>
+        </form>
+
+        <!-- Notes List -->
+        {notes.length > 0 && (
+          <div class="notes-list">
+            {notes.map((note) => (
+              <div class="note-item">
+                <div class="note-header">
+                  <span class="note-author">{note.admin_name || 'Admin'}</span>
+                  <span class="note-date">{formatDateTime(note.created_at)}</span>
+                </div>
+                <p class="note-content">{note.content}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <!-- Questionnaire (Accordion) -->
+      {questionnaire && (
+        <div class="detail-card">
+          <button class="accordion-trigger" id="questionnaire-toggle">
+            <h3 class="card-title">Questionnaire Responses</h3>
+            <svg class="accordion-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          <div class="accordion-content" id="questionnaire-content">
+            <div class="questionnaire-grid">
+              {Object.entries(questionnaire.responses || {}).map(([key, value]) => (
+                <div class="questionnaire-item">
+                  <span class="questionnaire-label">{key.replace(/_/g, ' ')}</span>
+                  <span class="questionnaire-value">{String(value)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+
+    <!-- Sidebar -->
+    <div class="space-y-6">
+      <!-- Customer Card -->
+      <div class="sidebar-card">
+        <h4 class="sidebar-title">Customer</h4>
+        {customer ? (
+          <div class="customer-info">
+            <div class="customer-avatar">
+              <span>{(customer.full_name || customer.email || '?').charAt(0).toUpperCase()}</span>
+            </div>
+            <div class="customer-details">
+              <p class="customer-name">{customer.full_name || 'Unknown'}</p>
+              <p class="customer-email">{customer.email}</p>
+              {customer.phone && (
+                <p class="customer-phone">{customer.phone_country_code} {customer.phone}</p>
+              )}
+            </div>
+          </div>
+        ) : (
+          <p class="empty-text">Customer data unavailable</p>
+        )}
+        {customer && (
+          <a href={`/admin/customers/${customer.id}`} class="view-customer-btn">
+            View Customer Profile
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            </svg>
+          </a>
+        )}
+      </div>
+
+      <!-- Payment Card -->
+      <div class="sidebar-card">
+        <h4 class="sidebar-title">Payment</h4>
+        <div class="payment-summary">
+          <div class="payment-row">
+            <span>Subtotal</span>
+            <span>{formatCurrency(order.amount_expected, order.currency)}</span>
+          </div>
+          <div class="payment-row">
+            <span>Paid</span>
+            <span class={isPaid ? 'text-emerald-400' : 'text-amber-400'}>
+              {formatCurrency(order.amount_paid || 0, order.currency)}
+            </span>
+          </div>
+          <div class="payment-row total">
+            <span>Balance</span>
+            <span class={order.amount_expected - (order.amount_paid || 0) > 0 ? 'text-red-400' : 'text-emerald-400'}>
+              {formatCurrency(order.amount_expected - (order.amount_paid || 0), order.currency)}
+            </span>
+          </div>
+        </div>
+        <div class="payment-status">
+          <span class="payment-status-label">Status:</span>
+          <span class={`payment-status-badge ${isPaid ? 'paid' : 'pending'}`}>
+            {order.payment_status}
+          </span>
+        </div>
+        {order.payment_provider && (
+          <div class="payment-provider">
+            <span>Provider:</span>
+            <span class="provider-badge">{order.payment_provider}</span>
+          </div>
+        )}
+      </div>
+
+      <!-- Quick Actions -->
+      <div class="sidebar-card">
+        <h4 class="sidebar-title">Quick Actions</h4>
+        <div class="quick-actions">
+          <button class="quick-action-btn">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+            Email Customer
+          </button>
+          <button class="quick-action-btn">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            Download Invoice
+          </button>
+          {order.delivery_url && (
+            <a href={order.delivery_url} target="_blank" class="quick-action-btn primary">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+              </svg>
+              View Delivered Song
+            </a>
+          )}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Status Change Modal -->
+  <div id="status-modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <h3 class="modal-title">Change Order Status</h3>
+      <form id="status-form">
+        <input type="hidden" name="csrf_token" value={csrfToken} />
+        <input type="hidden" name="order_id" value={order.id} />
+        <input type="hidden" name="new_status" id="new-status-input" value="" />
+
+        <div class="modal-body">
+          <p class="status-change-text">
+            Change status from <strong class="current-status">{order.status.replace(/_/g, ' ')}</strong>
+            to <strong class="new-status" id="new-status-display"></strong>
+          </p>
+
+          <div class="form-group">
+            <label for="status-note">Note (optional)</label>
+            <textarea
+              id="status-note"
+              name="note"
+              rows={3}
+              placeholder="Add a note about this status change..."
+              class="modal-textarea"
+            ></textarea>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" id="cancel-status-btn" class="modal-btn secondary">Cancel</button>
+          <button type="submit" class="modal-btn primary">Update Status</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</AdminLayout>
+
+<style>
+  :root {
+    --admin-black: #0A0A0A;
+    --admin-card: #111111;
+    --admin-cream: #F5F5F5;
+    --gold: #D4AF37;
+  }
+
+  .font-display { font-family: 'Playfair Display', serif; }
+  .font-mono { font-family: 'JetBrains Mono', monospace; }
+
+  /* Back Link */
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+    color: rgba(245, 245, 245, 0.5);
+    font-size: 0.875rem;
+    transition: color 0.2s ease;
+  }
+
+  .back-link:hover {
+    color: var(--gold);
+  }
+
+  /* Order Header */
+  .order-header {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 2rem;
+    padding: 1.5rem;
+    background: var(--admin-card);
+    border: 1px solid rgba(212, 175, 55, 0.08);
+    border-radius: 1rem;
+  }
+
+  .order-number-lg {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.5rem;
+    color: var(--gold);
+    font-weight: 600;
+  }
+
+  .status-badge-lg {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border-radius: 9999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border: 1px solid;
+  }
+
+  .status-dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 9999px;
+  }
+
+  .payment-verified {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.375rem 0.75rem;
+    background: rgba(16, 185, 129, 0.1);
+    border-radius: 9999px;
+    color: #10b981;
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+
+  .order-date {
+    margin-top: 0.5rem;
+    color: rgba(245, 245, 245, 0.5);
+    font-size: 0.875rem;
+  }
+
+  .order-header-actions {
+    display: flex;
+    gap: 0.75rem;
+  }
+
+  /* Status Dropdown */
+  .status-dropdown {
+    position: relative;
+  }
+
+  .status-dropdown-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1rem;
+    background: rgba(212, 175, 55, 0.1);
+    border: 1px solid rgba(212, 175, 55, 0.2);
+    border-radius: 0.5rem;
+    color: var(--gold);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .status-dropdown-btn:hover {
+    background: rgba(212, 175, 55, 0.15);
+    border-color: var(--gold);
+  }
+
+  .status-dropdown-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 0.5rem;
+    min-width: 200px;
+    background: var(--admin-card);
+    border: 1px solid rgba(212, 175, 55, 0.15);
+    border-radius: 0.75rem;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-0.5rem);
+    transition: all 0.2s ease;
+    z-index: 50;
+    max-height: 300px;
+    overflow-y: auto;
+  }
+
+  .status-dropdown-menu.open {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+  }
+
+  .status-option {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    width: 100%;
+    padding: 0.75rem 1rem;
+    color: rgba(245, 245, 245, 0.7);
+    font-size: 0.875rem;
+    text-align: left;
+    transition: all 0.2s ease;
+    cursor: pointer;
+  }
+
+  .status-option:hover:not(:disabled) {
+    background: rgba(212, 175, 55, 0.1);
+    color: var(--admin-cream);
+  }
+
+  .status-option:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .status-option-dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 9999px;
+  }
+
+  .refund-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1rem;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    border-radius: 0.5rem;
+    color: #ef4444;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .refund-btn:hover {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: #ef4444;
+  }
+
+  /* Detail Cards */
+  .detail-card {
+    background: var(--admin-card);
+    border: 1px solid rgba(212, 175, 55, 0.08);
+    border-radius: 1rem;
+    padding: 1.5rem;
+  }
+
+  .card-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.125rem;
+    color: var(--admin-cream);
+    margin-bottom: 1.25rem;
+  }
+
+  .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.25rem;
+  }
+
+  .card-header .card-title {
+    margin-bottom: 0;
+  }
+
+  .notes-count {
+    padding: 0.25rem 0.625rem;
+    background: rgba(212, 175, 55, 0.15);
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    color: var(--gold);
+    font-weight: 600;
+  }
+
+  .detail-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.25rem;
+  }
+
+  .detail-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .detail-label {
+    font-size: 0.75rem;
+    color: rgba(245, 245, 245, 0.4);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .detail-value {
+    font-size: 1rem;
+    color: var(--admin-cream);
+    font-weight: 500;
+    text-transform: capitalize;
+  }
+
+  .detail-value.package {
+    color: var(--gold);
+  }
+
+  .detail-value.amount {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.25rem;
+  }
+
+  /* Timeline */
+  .timeline {
+    position: relative;
+  }
+
+  .timeline-item {
+    position: relative;
+    padding-left: 2rem;
+    padding-bottom: 1.5rem;
+  }
+
+  .timeline-item:last-child {
+    padding-bottom: 0;
+  }
+
+  .timeline-dot {
+    position: absolute;
+    left: 0;
+    top: 0.25rem;
+    width: 1rem;
+    height: 1rem;
+    border-radius: 9999px;
+    border: 2px solid;
+    background: var(--admin-card);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .timeline-dot.active {
+    background: currentColor;
+  }
+
+  .timeline-dot.dot-amber-400 { border-color: #fbbf24; color: #fbbf24; }
+  .timeline-dot.dot-emerald-400 { border-color: #34d399; color: #34d399; }
+  .timeline-dot.dot-blue-400 { border-color: #60a5fa; color: #60a5fa; }
+  .timeline-dot.dot-purple-400 { border-color: #c084fc; color: #c084fc; }
+  .timeline-dot.dot-indigo-400 { border-color: #818cf8; color: #818cf8; }
+  .timeline-dot.dot-cyan-400 { border-color: #22d3ee; color: #22d3ee; }
+  .timeline-dot.dot-orange-400 { border-color: #fb923c; color: #fb923c; }
+  .timeline-dot.dot-gold { border-color: var(--gold); color: var(--gold); }
+  .timeline-dot.dot-red-400 { border-color: #f87171; color: #f87171; }
+
+  .timeline-pulse {
+    position: absolute;
+    inset: -4px;
+    border-radius: 9999px;
+    background: currentColor;
+    opacity: 0.3;
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: 0.3; }
+    50% { transform: scale(1.3); opacity: 0; }
+  }
+
+  .timeline-line {
+    position: absolute;
+    left: 0.45rem;
+    top: 1.25rem;
+    bottom: 0;
+    width: 2px;
+    background: rgba(212, 175, 55, 0.15);
+  }
+
+  .timeline-content {
+    padding-top: 0;
+  }
+
+  .timeline-status {
+    font-weight: 600;
+    text-transform: capitalize;
+  }
+
+  .timeline-note {
+    margin-top: 0.25rem;
+    color: rgba(245, 245, 245, 0.6);
+    font-size: 0.875rem;
+  }
+
+  .timeline-date {
+    display: block;
+    margin-top: 0.25rem;
+    color: rgba(245, 245, 245, 0.4);
+    font-size: 0.75rem;
+  }
+
+  /* Notes */
+  .add-note-form {
+    margin-bottom: 1.5rem;
+  }
+
+  .note-input {
+    width: 100%;
+    padding: 0.875rem;
+    background: var(--admin-black);
+    border: 1px solid rgba(212, 175, 55, 0.15);
+    border-radius: 0.5rem;
+    color: var(--admin-cream);
+    font-size: 0.875rem;
+    resize: none;
+    transition: border-color 0.2s ease;
+  }
+
+  .note-input::placeholder {
+    color: rgba(245, 245, 245, 0.3);
+  }
+
+  .note-input:focus {
+    outline: none;
+    border-color: var(--gold);
+  }
+
+  .add-note-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    margin-top: 0.75rem;
+    padding: 0.5rem 1rem;
+    background: rgba(212, 175, 55, 0.1);
+    border: 1px solid rgba(212, 175, 55, 0.2);
+    border-radius: 0.5rem;
+    color: var(--gold);
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .add-note-btn:hover {
+    background: rgba(212, 175, 55, 0.15);
+    border-color: var(--gold);
+  }
+
+  .notes-list {
+    border-top: 1px solid rgba(212, 175, 55, 0.08);
+    padding-top: 1rem;
+  }
+
+  .note-item {
+    padding: 1rem;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 0.5rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .note-item:last-child {
+    margin-bottom: 0;
+  }
+
+  .note-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+  }
+
+  .note-author {
+    font-weight: 500;
+    color: var(--gold);
+    font-size: 0.8rem;
+  }
+
+  .note-date {
+    color: rgba(245, 245, 245, 0.4);
+    font-size: 0.75rem;
+  }
+
+  .note-content {
+    color: rgba(245, 245, 245, 0.7);
+    font-size: 0.875rem;
+    line-height: 1.5;
+  }
+
+  /* Accordion */
+  .accordion-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    cursor: pointer;
+  }
+
+  .accordion-icon {
+    width: 1.25rem;
+    height: 1.25rem;
+    color: var(--gold);
+    transition: transform 0.2s ease;
+  }
+
+  .accordion-trigger.open .accordion-icon {
+    transform: rotate(180deg);
+  }
+
+  .accordion-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+  }
+
+  .accordion-content.open {
+    max-height: 1000px;
+    margin-top: 1.25rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid rgba(212, 175, 55, 0.08);
+  }
+
+  .questionnaire-grid {
+    display: grid;
+    gap: 1rem;
+  }
+
+  .questionnaire-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .questionnaire-label {
+    font-size: 0.75rem;
+    color: rgba(245, 245, 245, 0.4);
+    text-transform: capitalize;
+  }
+
+  .questionnaire-value {
+    color: var(--admin-cream);
+    font-size: 0.875rem;
+  }
+
+  /* Sidebar Cards */
+  .sidebar-card {
+    background: var(--admin-card);
+    border: 1px solid rgba(212, 175, 55, 0.08);
+    border-radius: 1rem;
+    padding: 1.25rem;
+  }
+
+  .sidebar-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1rem;
+    color: var(--admin-cream);
+    margin-bottom: 1rem;
+  }
+
+  /* Customer Info */
+  .customer-info {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .customer-avatar {
+    width: 3rem;
+    height: 3rem;
+    border-radius: 9999px;
+    background: linear-gradient(135deg, rgba(212, 175, 55, 0.2) 0%, rgba(212, 175, 55, 0.1) 100%);
+    border: 1px solid rgba(212, 175, 55, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .customer-avatar span {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.125rem;
+    color: var(--gold);
+  }
+
+  .customer-details {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .customer-name {
+    font-weight: 600;
+    color: var(--admin-cream);
+    margin-bottom: 0.125rem;
+  }
+
+  .customer-email,
+  .customer-phone {
+    font-size: 0.8rem;
+    color: rgba(245, 245, 245, 0.5);
+  }
+
+  .view-customer-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem;
+    background: rgba(212, 175, 55, 0.05);
+    border-radius: 0.5rem;
+    color: var(--gold);
+    font-size: 0.8rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+  }
+
+  .view-customer-btn:hover {
+    background: rgba(212, 175, 55, 0.1);
+  }
+
+  /* Payment Summary */
+  .payment-summary {
+    margin-bottom: 1rem;
+  }
+
+  .payment-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem 0;
+    font-size: 0.875rem;
+    color: rgba(245, 245, 245, 0.6);
+  }
+
+  .payment-row.total {
+    border-top: 1px solid rgba(212, 175, 55, 0.1);
+    margin-top: 0.5rem;
+    padding-top: 0.75rem;
+    font-weight: 600;
+    color: var(--admin-cream);
+  }
+
+  .payment-status,
+  .payment-provider {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+    color: rgba(245, 245, 245, 0.5);
+    margin-top: 0.75rem;
+  }
+
+  .payment-status-badge {
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.7rem;
+    font-weight: 500;
+    text-transform: uppercase;
+  }
+
+  .payment-status-badge.paid {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+  }
+
+  .payment-status-badge.pending {
+    background: rgba(251, 191, 36, 0.15);
+    color: #fbbf24;
+  }
+
+  .provider-badge {
+    padding: 0.25rem 0.5rem;
+    background: rgba(212, 175, 55, 0.1);
+    border-radius: 0.25rem;
+    color: var(--gold);
+    font-size: 0.7rem;
+    text-transform: capitalize;
+  }
+
+  /* Quick Actions */
+  .quick-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .quick-action-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background: transparent;
+    border: 1px solid rgba(212, 175, 55, 0.1);
+    border-radius: 0.5rem;
+    color: rgba(245, 245, 245, 0.6);
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .quick-action-btn:hover {
+    border-color: rgba(212, 175, 55, 0.3);
+    color: var(--gold);
+    background: rgba(212, 175, 55, 0.05);
+  }
+
+  .quick-action-btn.primary {
+    background: rgba(212, 175, 55, 0.1);
+    border-color: rgba(212, 175, 55, 0.2);
+    color: var(--gold);
+  }
+
+  .quick-action-btn.primary:hover {
+    background: rgba(212, 175, 55, 0.15);
+    border-color: var(--gold);
+  }
+
+  .empty-text {
+    color: rgba(245, 245, 245, 0.4);
+    font-size: 0.875rem;
+    font-style: italic;
+  }
+
+  /* Modal */
+  .modal {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+  }
+
+  .modal.hidden {
+    display: none;
+  }
+
+  .modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(4px);
+  }
+
+  .modal-content {
+    position: relative;
+    width: 100%;
+    max-width: 450px;
+    background: var(--admin-card);
+    border: 1px solid rgba(212, 175, 55, 0.15);
+    border-radius: 1rem;
+    padding: 1.5rem;
+  }
+
+  .modal-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.25rem;
+    color: var(--admin-cream);
+    margin-bottom: 1.25rem;
+  }
+
+  .modal-body {
+    margin-bottom: 1.5rem;
+  }
+
+  .status-change-text {
+    color: rgba(245, 245, 245, 0.7);
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+  }
+
+  .current-status {
+    color: rgba(245, 245, 245, 0.9);
+    text-transform: capitalize;
+  }
+
+  .new-status {
+    color: var(--gold);
+    text-transform: capitalize;
+  }
+
+  .form-group {
+    margin-top: 1rem;
+  }
+
+  .form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-size: 0.8rem;
+    color: rgba(245, 245, 245, 0.5);
+  }
+
+  .modal-textarea {
+    width: 100%;
+    padding: 0.75rem;
+    background: var(--admin-black);
+    border: 1px solid rgba(212, 175, 55, 0.15);
+    border-radius: 0.5rem;
+    color: var(--admin-cream);
+    font-size: 0.875rem;
+    resize: none;
+  }
+
+  .modal-textarea:focus {
+    outline: none;
+    border-color: var(--gold);
+  }
+
+  .modal-actions {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-end;
+  }
+
+  .modal-btn {
+    padding: 0.625rem 1.25rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .modal-btn.secondary {
+    background: transparent;
+    border: 1px solid rgba(212, 175, 55, 0.2);
+    color: rgba(245, 245, 245, 0.7);
+  }
+
+  .modal-btn.secondary:hover {
+    border-color: rgba(212, 175, 55, 0.4);
+    color: var(--admin-cream);
+  }
+
+  .modal-btn.primary {
+    background: var(--gold);
+    border: none;
+    color: var(--admin-black);
+  }
+
+  .modal-btn.primary:hover {
+    background: #B8962E;
+  }
+
+  /* Utility colors */
+  .text-gold { color: var(--gold); }
+  .text-emerald-400 { color: #34d399; }
+  .text-amber-400 { color: #fbbf24; }
+  .text-red-400 { color: #f87171; }
+  .bg-amber-400 { background-color: #fbbf24; }
+  .bg-emerald-400 { background-color: #34d399; }
+  .bg-blue-400 { background-color: #60a5fa; }
+  .bg-purple-400 { background-color: #c084fc; }
+  .bg-indigo-400 { background-color: #818cf8; }
+  .bg-cyan-400 { background-color: #22d3ee; }
+  .bg-orange-400 { background-color: #fb923c; }
+  .bg-red-400 { background-color: #f87171; }
+  .bg-gold { background-color: var(--gold); }
+</style>
+
+<script>
+  // Status dropdown
+  const statusBtn = document.getElementById('status-dropdown-btn');
+  const statusMenu = document.getElementById('status-dropdown-menu');
+  const statusModal = document.getElementById('status-modal');
+  const statusForm = document.getElementById('status-form');
+  const newStatusInput = document.getElementById('new-status-input') as HTMLInputElement;
+  const newStatusDisplay = document.getElementById('new-status-display');
+  const cancelStatusBtn = document.getElementById('cancel-status-btn');
+
+  statusBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    statusMenu?.classList.toggle('open');
+  });
+
+  document.addEventListener('click', () => {
+    statusMenu?.classList.remove('open');
+  });
+
+  // Status option click
+  document.querySelectorAll('.status-option').forEach(option => {
+    option.addEventListener('click', () => {
+      const status = (option as HTMLElement).dataset.status;
+      if (status) {
+        newStatusInput.value = status;
+        if (newStatusDisplay) {
+          newStatusDisplay.textContent = status.replace(/_/g, ' ');
+        }
+        statusModal?.classList.remove('hidden');
+        statusMenu?.classList.remove('open');
+      }
+    });
+  });
+
+  cancelStatusBtn?.addEventListener('click', () => {
+    statusModal?.classList.add('hidden');
+  });
+
+  statusModal?.querySelector('.modal-backdrop')?.addEventListener('click', () => {
+    statusModal?.classList.add('hidden');
+  });
+
+  // Questionnaire accordion
+  const questionnaireToggle = document.getElementById('questionnaire-toggle');
+  const questionnaireContent = document.getElementById('questionnaire-content');
+
+  questionnaireToggle?.addEventListener('click', () => {
+    questionnaireToggle.classList.toggle('open');
+    questionnaireContent?.classList.toggle('open');
+  });
+
+  // Status update form submission
+  statusForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const submitBtn = statusForm.querySelector('button[type="submit"]') as HTMLButtonElement;
+    const originalText = submitBtn.textContent;
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Updating...';
+
+    try {
+      const formData = new FormData(statusForm);
+
+      const response = await fetch('/api/admin/orders/update-status', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to update status');
+      }
+
+      // Reload page to show updated status
+      window.location.reload();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to update status');
+      submitBtn.disabled = false;
+      submitBtn.textContent = originalText;
+    }
+  });
+
+  // Add note form submission
+  const addNoteForm = document.getElementById('add-note-form');
+  addNoteForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const submitBtn = addNoteForm.querySelector('button[type="submit"]') as HTMLButtonElement;
+    const noteInput = addNoteForm.querySelector('textarea[name="note"]') as HTMLTextAreaElement;
+    const originalText = submitBtn.textContent;
+
+    if (!noteInput.value.trim()) {
+      alert('Please enter a note');
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Adding...';
+
+    try {
+      const formData = new FormData();
+      formData.append('csrf_token', (addNoteForm.querySelector('input[name="csrf_token"]') as HTMLInputElement).value);
+      formData.append('order_id', (addNoteForm.querySelector('input[name="order_id"]') as HTMLInputElement).value);
+      formData.append('content', noteInput.value);
+
+      const response = await fetch('/api/admin/orders/add-note', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to add note');
+      }
+
+      // Reload page to show new note
+      window.location.reload();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to add note');
+      submitBtn.disabled = false;
+      submitBtn.textContent = originalText;
+    }
+  });
+</script>

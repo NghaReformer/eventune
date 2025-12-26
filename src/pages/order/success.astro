@@ -1,0 +1,240 @@
+---
+/**
+ * Payment Success Page
+ * Shown after successful payment completion
+ */
+
+import PublicLayout from '@/layouts/PublicLayout.astro';
+import { getServerClient } from '@/lib/supabase/server';
+import { getPackageBySlug, getOccasionBySlug } from '@/services/config.service';
+
+const orderId = Astro.url.searchParams.get('order_id');
+
+if (!orderId) {
+  return Astro.redirect('/');
+}
+
+// Get order details
+const supabase = getServerClient();
+const { data: order, error } = await supabase
+  .from('orders')
+  .select('*')
+  .eq('id', orderId)
+  .single();
+
+if (error || !order) {
+  return Astro.redirect('/');
+}
+
+// Get package and occasion details
+const [pkg, occasion] = await Promise.all([
+  order.package_slug ? getPackageBySlug(order.package_slug) : null,
+  order.occasion_slug ? getOccasionBySlug(order.occasion_slug) : null,
+]);
+
+// Calculate estimated delivery
+const deliveryDays = pkg?.delivery_days_max ?? 7;
+const estimatedDelivery = new Date();
+estimatedDelivery.setDate(estimatedDelivery.getDate() + deliveryDays);
+const deliveryDateStr = estimatedDelivery.toLocaleDateString('en-US', {
+  weekday: 'long',
+  year: 'numeric',
+  month: 'long',
+  day: 'numeric',
+});
+
+const isPaid = order.payment_status === 'completed' || order.status === 'paid';
+---
+
+<PublicLayout
+  title="Order Confirmed - Eventune Studios"
+  description="Your custom song order has been confirmed"
+>
+  <main class="min-h-screen bg-gradient-to-b from-gray-50 to-white py-16">
+    <div class="container mx-auto px-4">
+      <div class="max-w-2xl mx-auto text-center">
+        <!-- Success Icon -->
+        <div class="mb-8">
+          <div class="w-24 h-24 mx-auto bg-green-100 rounded-full flex items-center justify-center">
+            <svg class="w-12 h-12 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Heading -->
+        <h1 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+          {isPaid ? 'Thank You for Your Order!' : 'Order Received!'}
+        </h1>
+
+        <p class="text-lg text-gray-600 mb-8">
+          {isPaid
+            ? 'Your payment has been confirmed. We\'re excited to create your personalized song!'
+            : 'We\'re processing your payment. You\'ll receive a confirmation email shortly.'}
+        </p>
+
+        <!-- Order Summary Card -->
+        <div class="bg-white rounded-2xl shadow-lg p-8 mb-8 text-left">
+          <h2 class="text-lg font-semibold text-gray-900 mb-6 text-center">Order Summary</h2>
+
+          <div class="space-y-4">
+            <div class="flex justify-between items-center py-3 border-b border-gray-100">
+              <span class="text-gray-600">Order Number</span>
+              <span class="font-mono font-medium text-gray-900">{order.order_number}</span>
+            </div>
+
+            {pkg && (
+              <div class="flex justify-between items-center py-3 border-b border-gray-100">
+                <span class="text-gray-600">Package</span>
+                <span class="font-medium text-gray-900">{pkg.name}</span>
+              </div>
+            )}
+
+            {occasion && (
+              <div class="flex justify-between items-center py-3 border-b border-gray-100">
+                <span class="text-gray-600">Occasion</span>
+                <span class="font-medium text-gray-900">{occasion.name}</span>
+              </div>
+            )}
+
+            <div class="flex justify-between items-center py-3 border-b border-gray-100">
+              <span class="text-gray-600">Amount</span>
+              <span class="font-medium text-gray-900">
+                {order.currency === 'USD' ? '$' : ''}{order.amount_expected.toLocaleString()} {order.currency}
+              </span>
+            </div>
+
+            <div class="flex justify-between items-center py-3 border-b border-gray-100">
+              <span class="text-gray-600">Payment Status</span>
+              <span class={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                isPaid
+                  ? 'bg-green-100 text-green-800'
+                  : 'bg-yellow-100 text-yellow-800'
+              }`}>
+                {isPaid ? 'Paid' : 'Processing'}
+              </span>
+            </div>
+
+            <div class="flex justify-between items-center py-3">
+              <span class="text-gray-600">Estimated Delivery</span>
+              <span class="font-medium text-gray-900">{deliveryDateStr}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- What's Next Section -->
+        <div class="bg-primary-50 rounded-2xl p-8 mb-8 text-left">
+          <h2 class="text-lg font-semibold text-gray-900 mb-4">What Happens Next?</h2>
+
+          <ol class="space-y-4">
+            <li class="flex items-start">
+              <span class="flex-shrink-0 w-6 h-6 bg-primary-600 text-white rounded-full flex items-center justify-center text-sm font-medium mr-3 mt-0.5">1</span>
+              <div>
+                <p class="font-medium text-gray-900">Confirmation Email</p>
+                <p class="text-sm text-gray-600">You'll receive an email with your order details at {order.customer_email}</p>
+              </div>
+            </li>
+
+            <li class="flex items-start">
+              <span class="flex-shrink-0 w-6 h-6 bg-primary-600 text-white rounded-full flex items-center justify-center text-sm font-medium mr-3 mt-0.5">2</span>
+              <div>
+                <p class="font-medium text-gray-900">Song Creation</p>
+                <p class="text-sm text-gray-600">Our artists will begin crafting your personalized song based on your story</p>
+              </div>
+            </li>
+
+            {pkg?.includes_discovery_call && (
+              <li class="flex items-start">
+                <span class="flex-shrink-0 w-6 h-6 bg-primary-600 text-white rounded-full flex items-center justify-center text-sm font-medium mr-3 mt-0.5">3</span>
+                <div>
+                  <p class="font-medium text-gray-900">Discovery Call</p>
+                  <p class="text-sm text-gray-600">We'll reach out to schedule your discovery call to discuss your vision</p>
+                </div>
+              </li>
+            )}
+
+            <li class="flex items-start">
+              <span class="flex-shrink-0 w-6 h-6 bg-primary-600 text-white rounded-full flex items-center justify-center text-sm font-medium mr-3 mt-0.5">{pkg?.includes_discovery_call ? '4' : '3'}</span>
+              <div>
+                <p class="font-medium text-gray-900">Delivery</p>
+                <p class="text-sm text-gray-600">Your completed song will be delivered to your portal and email</p>
+              </div>
+            </li>
+          </ol>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex flex-col sm:flex-row gap-4 justify-center">
+          <a
+            href="/portal"
+            class="inline-flex items-center justify-center px-6 py-3 bg-primary-600 text-white font-medium rounded-lg hover:bg-primary-700 transition-colors"
+          >
+            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+            </svg>
+            Track Your Order
+          </a>
+
+          <a
+            href="/"
+            class="inline-flex items-center justify-center px-6 py-3 bg-white text-gray-700 font-medium rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors"
+          >
+            Return Home
+          </a>
+        </div>
+
+        <!-- Contact Info -->
+        <p class="mt-8 text-sm text-gray-500">
+          Questions? Contact us at{' '}
+          <a href="mailto:support@eventunestudios.com" class="text-primary-600 hover:underline">
+            support@eventunestudios.com
+          </a>
+        </p>
+      </div>
+    </div>
+  </main>
+
+  <!-- Payment Status Polling (for pending payments) -->
+  {!isPaid && (
+    <script define:vars={{ orderId }}>
+      let pollCount = 0;
+      const maxPolls = 60; // 5 minutes (5s interval)
+
+      async function checkPaymentStatus() {
+        if (pollCount >= maxPolls) {
+          console.log('Payment status polling timeout');
+          return;
+        }
+
+        try {
+          const response = await fetch('/api/payments/check-status', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ orderId }),
+          });
+
+          const data = await response.json();
+
+          if (data.status === 'completed') {
+            // Refresh page to show updated status
+            window.location.reload();
+          } else if (data.status === 'failed') {
+            // Redirect to checkout with error
+            window.location.href = `/order/checkout?order_id=${orderId}&error=payment_failed`;
+          } else {
+            // Continue polling
+            pollCount++;
+            setTimeout(checkPaymentStatus, 5000);
+          }
+        } catch (error) {
+          console.error('Error checking payment status:', error);
+          pollCount++;
+          setTimeout(checkPaymentStatus, 5000);
+        }
+      }
+
+      // Start polling after 3 seconds
+      setTimeout(checkPaymentStatus, 3000);
+    </script>
+  )}
+</PublicLayout>

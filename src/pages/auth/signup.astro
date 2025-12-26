@@ -1,0 +1,351 @@
+---
+/**
+ * Signup Page
+ * User registration with email verification
+ */
+
+import AuthLayout from '@/layouts/AuthLayout.astro';
+import Card from '@/components/ui/Card.astro';
+import Input from '@/components/ui/Input.astro';
+import Button from '@/components/ui/Button.astro';
+---
+
+<AuthLayout title="Sign Up | Eventune Studios" description="Create your Eventune Studios account">
+  <Card variant="elevated" class="p-8">
+    <!-- Header -->
+    <div class="text-center mb-8">
+      <h1 class="text-2xl font-heading font-bold text-text-primary mb-2">
+        Create Your Account
+      </h1>
+      <p class="text-text-secondary">
+        Join us and start creating personalized songs
+      </p>
+    </div>
+
+    <!-- Success State (hidden by default) -->
+    <div id="success-state" class="hidden text-center py-8">
+      <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-status-success/20 flex items-center justify-center">
+        <svg class="w-8 h-8 text-status-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+        </svg>
+      </div>
+      <h2 class="text-xl font-heading font-bold text-text-primary mb-2">
+        Check Your Email
+      </h2>
+      <p class="text-text-secondary mb-6">
+        We've sent a confirmation link to <span id="success-email" class="text-accent-gold"></span>.
+        Please click the link to verify your account.
+      </p>
+      <p class="text-text-muted text-sm">
+        Didn't receive the email? Check your spam folder or
+        <button type="button" id="resend-btn" class="text-accent-gold hover:text-accent-goldHover transition-colors">
+          resend confirmation
+        </button>
+      </p>
+    </div>
+
+    <!-- Signup Form -->
+    <form id="signup-form" class="space-y-6">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Input
+          label="First Name"
+          name="firstName"
+          placeholder="John"
+          required
+          autocomplete="given-name"
+        />
+        <Input
+          label="Last Name"
+          name="lastName"
+          placeholder="Doe"
+          required
+          autocomplete="family-name"
+        />
+      </div>
+
+      <Input
+        label="Email Address"
+        name="email"
+        type="email"
+        placeholder="you@example.com"
+        required
+        autocomplete="email"
+      />
+
+      <div>
+        <label for="password" class="block text-sm font-medium text-text-primary mb-2">
+          Password
+        </label>
+        <input
+          type="password"
+          id="password"
+          name="password"
+          required
+          autocomplete="new-password"
+          minlength="8"
+          class="w-full px-4 py-3 bg-primary-cardBlack border border-text-muted/30 rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-accent-gold/50 focus:border-accent-gold transition-colors"
+          placeholder="Create a password (min. 8 characters)"
+        />
+        <div id="password-strength" class="mt-2 hidden">
+          <div class="flex gap-1">
+            <div class="h-1 flex-1 rounded bg-text-muted/30 strength-bar"></div>
+            <div class="h-1 flex-1 rounded bg-text-muted/30 strength-bar"></div>
+            <div class="h-1 flex-1 rounded bg-text-muted/30 strength-bar"></div>
+            <div class="h-1 flex-1 rounded bg-text-muted/30 strength-bar"></div>
+          </div>
+          <p class="text-xs mt-1 strength-text text-text-muted"></p>
+        </div>
+      </div>
+
+      <div>
+        <label for="confirmPassword" class="block text-sm font-medium text-text-primary mb-2">
+          Confirm Password
+        </label>
+        <input
+          type="password"
+          id="confirmPassword"
+          name="confirmPassword"
+          required
+          autocomplete="new-password"
+          minlength="8"
+          class="w-full px-4 py-3 bg-primary-cardBlack border border-text-muted/30 rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-accent-gold/50 focus:border-accent-gold transition-colors"
+          placeholder="Confirm your password"
+        />
+      </div>
+
+      <!-- Terms Agreement -->
+      <div class="flex items-start gap-3">
+        <input
+          type="checkbox"
+          id="terms"
+          name="terms"
+          required
+          class="mt-1 w-4 h-4 rounded border-text-muted/30 bg-primary-cardBlack text-accent-gold focus:ring-accent-gold/50"
+        />
+        <label for="terms" class="text-sm text-text-secondary">
+          I agree to the
+          <a href="/legal/terms" class="text-accent-gold hover:text-accent-goldHover transition-colors">Terms of Service</a>
+          and
+          <a href="/legal/privacy-policy" class="text-accent-gold hover:text-accent-goldHover transition-colors">Privacy Policy</a>
+        </label>
+      </div>
+
+      <!-- Error Message -->
+      <div id="error-message" class="hidden p-4 bg-status-error/20 border border-status-error rounded-lg text-status-error text-sm">
+      </div>
+
+      <!-- Rate Limit Warning -->
+      <div id="rate-limit-warning" class="hidden p-4 bg-status-warning/20 border border-status-warning rounded-lg text-status-warning text-sm">
+        Too many signup attempts. Please try again later.
+      </div>
+
+      <Button type="submit" variant="primary" size="lg" fullWidth id="submit-btn">
+        Create Account
+      </Button>
+    </form>
+
+    <!-- Login Link -->
+    <p id="login-link" class="mt-8 text-center text-text-secondary text-sm">
+      Already have an account?
+      <a href="/auth/login" class="text-accent-gold hover:text-accent-goldHover transition-colors font-medium">
+        Sign in
+      </a>
+    </p>
+  </Card>
+</AuthLayout>
+
+<script>
+  import { supabase } from '@/lib/supabase/client';
+
+  const form = document.getElementById('signup-form') as HTMLFormElement;
+  const submitBtn = document.getElementById('submit-btn') as HTMLButtonElement;
+  const errorMessage = document.getElementById('error-message') as HTMLElement;
+  const rateLimitWarning = document.getElementById('rate-limit-warning') as HTMLElement;
+  const successState = document.getElementById('success-state') as HTMLElement;
+  const successEmail = document.getElementById('success-email') as HTMLElement;
+  const loginLink = document.getElementById('login-link') as HTMLElement;
+  const resendBtn = document.getElementById('resend-btn') as HTMLButtonElement;
+  const passwordInput = document.getElementById('password') as HTMLInputElement;
+  const confirmPasswordInput = document.getElementById('confirmPassword') as HTMLInputElement;
+  const passwordStrength = document.getElementById('password-strength') as HTMLElement;
+
+  let userEmail = '';
+
+  // Password strength checker
+  function checkPasswordStrength(password: string): { score: number; text: string; color: string } {
+    let score = 0;
+
+    if (password.length >= 8) score++;
+    if (password.length >= 12) score++;
+    if (/[a-z]/.test(password) && /[A-Z]/.test(password)) score++;
+    if (/\d/.test(password)) score++;
+    if (/[^a-zA-Z0-9]/.test(password)) score++;
+
+    if (score <= 1) return { score: 1, text: 'Weak', color: 'bg-status-error' };
+    if (score <= 2) return { score: 2, text: 'Fair', color: 'bg-status-warning' };
+    if (score <= 3) return { score: 3, text: 'Good', color: 'bg-status-info' };
+    return { score: 4, text: 'Strong', color: 'bg-status-success' };
+  }
+
+  passwordInput?.addEventListener('input', () => {
+    const password = passwordInput.value;
+    if (password.length === 0) {
+      passwordStrength?.classList.add('hidden');
+      return;
+    }
+
+    passwordStrength?.classList.remove('hidden');
+    const strength = checkPasswordStrength(password);
+
+    const bars = passwordStrength.querySelectorAll('.strength-bar');
+    const text = passwordStrength.querySelector('.strength-text');
+
+    bars.forEach((bar, index) => {
+      bar.className = 'h-1 flex-1 rounded strength-bar ' +
+        (index < strength.score ? strength.color : 'bg-text-muted/30');
+    });
+
+    if (text) {
+      text.textContent = strength.text;
+      text.className = 'text-xs mt-1 strength-text ' + strength.color.replace('bg-', 'text-');
+    }
+  });
+
+  function showError(message: string) {
+    errorMessage.textContent = message;
+    errorMessage?.classList.remove('hidden');
+    rateLimitWarning?.classList.add('hidden');
+  }
+
+  function hideError() {
+    errorMessage?.classList.add('hidden');
+  }
+
+  function showSuccess(email: string) {
+    form?.classList.add('hidden');
+    loginLink?.classList.add('hidden');
+    successState?.classList.remove('hidden');
+    if (successEmail) successEmail.textContent = email;
+  }
+
+  // Check if already logged in
+  supabase.auth.getSession().then(({ data: { session } }) => {
+    if (session) {
+      window.location.href = '/portal';
+    }
+  });
+
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    hideError();
+
+    const formData = new FormData(form);
+    const firstName = formData.get('firstName') as string;
+    const lastName = formData.get('lastName') as string;
+    const email = formData.get('email') as string;
+    const password = formData.get('password') as string;
+    const confirmPassword = formData.get('confirmPassword') as string;
+
+    // Validate passwords match
+    if (password !== confirmPassword) {
+      showError('Passwords do not match.');
+      return;
+    }
+
+    // Validate password strength
+    const strength = checkPasswordStrength(password);
+    if (strength.score < 2) {
+      showError('Please choose a stronger password. Include uppercase, lowercase, numbers, and special characters.');
+      return;
+    }
+
+    userEmail = email;
+
+    // Disable button and show loading
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Creating account...';
+
+    try {
+      // Server-side rate limiting check
+      const rateLimitResponse = await fetch('/api/auth/check-rate-limit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'signup' }),
+      });
+
+      if (rateLimitResponse.status === 429) {
+        rateLimitWarning?.classList.remove('hidden');
+        errorMessage?.classList.add('hidden');
+        return;
+      }
+
+      // Attempt signup
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            first_name: firstName,
+            last_name: lastName,
+            full_name: `${firstName} ${lastName}`,
+          },
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+
+      if (error) {
+        if (error.message.includes('already registered')) {
+          showError('An account with this email already exists. Please sign in or use a different email.');
+        } else {
+          showError(error.message);
+        }
+        return;
+      }
+
+      // Check if email confirmation is required
+      if (data.user && !data.session) {
+        // Email confirmation required
+        showSuccess(email);
+      } else if (data.session) {
+        // Auto-confirmed (shouldn't happen with email confirmation enabled)
+        window.location.href = '/portal';
+      }
+
+    } catch (err) {
+      showError('An unexpected error occurred. Please try again.');
+      console.error('Signup error:', err);
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Create Account';
+    }
+  });
+
+  // Resend confirmation email
+  resendBtn?.addEventListener('click', async () => {
+    if (!userEmail) return;
+
+    resendBtn.disabled = true;
+    resendBtn.textContent = 'Sending...';
+
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: userEmail,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+
+      if (error) {
+        alert('Failed to resend confirmation email. Please try again.');
+      } else {
+        alert('Confirmation email sent! Please check your inbox.');
+      }
+    } catch (err) {
+      alert('Failed to resend confirmation email. Please try again.');
+    } finally {
+      resendBtn.disabled = false;
+      resendBtn.textContent = 'resend confirmation';
+    }
+  });
+</script>

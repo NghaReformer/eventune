@@ -1,0 +1,277 @@
+---
+/**
+ * Login Page
+ * User authentication with rate limiting
+ */
+
+import AuthLayout from '@/layouts/AuthLayout.astro';
+import Card from '@/components/ui/Card.astro';
+import Input from '@/components/ui/Input.astro';
+import Button from '@/components/ui/Button.astro';
+
+// Check if user is already logged in (redirect if so)
+// This will be handled client-side since we need to check Supabase session
+---
+
+<AuthLayout title="Login | Eventune Studios" description="Sign in to your Eventune Studios account">
+  <Card variant="elevated" class="p-8">
+    <!-- Header -->
+    <div class="text-center mb-8">
+      <h1 class="text-2xl font-heading font-bold text-text-primary mb-2">
+        Welcome Back
+      </h1>
+      <p class="text-text-secondary">
+        Sign in to your account to continue
+      </p>
+    </div>
+
+    <!-- Login Form -->
+    <form id="login-form" class="space-y-6">
+      <Input
+        label="Email Address"
+        name="email"
+        type="email"
+        placeholder="you@example.com"
+        required
+        autocomplete="email"
+      />
+
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <label for="password" class="block text-sm font-medium text-text-primary">
+            Password
+          </label>
+          <a
+            href="/auth/forgot-password"
+            class="text-sm text-accent-gold hover:text-accent-goldHover transition-colors"
+          >
+            Forgot password?
+          </a>
+        </div>
+        <input
+          type="password"
+          id="password"
+          name="password"
+          required
+          autocomplete="current-password"
+          minlength="8"
+          class="w-full px-4 py-3 bg-primary-cardBlack border border-text-muted/30 rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-accent-gold/50 focus:border-accent-gold transition-colors"
+          placeholder="Enter your password"
+        />
+      </div>
+
+      <!-- Error Message -->
+      <div id="error-message" class="hidden p-4 bg-status-error/20 border border-status-error rounded-lg text-status-error text-sm">
+      </div>
+
+      <!-- Rate Limit Warning -->
+      <div id="rate-limit-warning" class="hidden p-4 bg-status-warning/20 border border-status-warning rounded-lg text-status-warning text-sm">
+        Too many login attempts. Please try again in <span id="retry-timer">60</span> seconds.
+      </div>
+
+      <Button type="submit" variant="primary" size="lg" fullWidth id="submit-btn">
+        Sign In
+      </Button>
+    </form>
+
+    <!-- Divider -->
+    <div class="relative my-8">
+      <div class="absolute inset-0 flex items-center">
+        <div class="w-full border-t border-text-muted/30"></div>
+      </div>
+      <div class="relative flex justify-center text-sm">
+        <span class="px-4 bg-primary-cardBlack text-text-muted">or</span>
+      </div>
+    </div>
+
+    <!-- OAuth Buttons (placeholder for future) -->
+    <div class="space-y-3">
+      <button
+        type="button"
+        disabled
+        class="w-full flex items-center justify-center gap-3 px-4 py-3 border border-text-muted/30 rounded-lg text-text-secondary hover:border-text-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        <svg class="w-5 h-5" viewBox="0 0 24 24">
+          <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+          <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+          <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+          <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+        </svg>
+        Continue with Google (Coming Soon)
+      </button>
+    </div>
+
+    <!-- Sign Up Link -->
+    <p class="mt-8 text-center text-text-secondary text-sm">
+      Don't have an account?
+      <a href="/auth/signup" class="text-accent-gold hover:text-accent-goldHover transition-colors font-medium">
+        Sign up
+      </a>
+    </p>
+  </Card>
+</AuthLayout>
+
+<script>
+  import { supabase } from '@/lib/supabase/client';
+
+  const form = document.getElementById('login-form') as HTMLFormElement;
+  const submitBtn = document.getElementById('submit-btn') as HTMLButtonElement;
+  const errorMessage = document.getElementById('error-message') as HTMLElement;
+  const rateLimitWarning = document.getElementById('rate-limit-warning') as HTMLElement;
+  const retryTimer = document.getElementById('retry-timer') as HTMLElement;
+
+  // Track login attempts for client-side rate limiting
+  const MAX_ATTEMPTS = 5;
+  const LOCKOUT_DURATION = 60; // seconds
+  let attempts = parseInt(localStorage.getItem('loginAttempts') || '0');
+  let lockoutUntil = parseInt(localStorage.getItem('loginLockoutUntil') || '0');
+
+  // Check if currently locked out
+  function checkLockout(): boolean {
+    const now = Date.now();
+    if (lockoutUntil > now) {
+      showRateLimitWarning(Math.ceil((lockoutUntil - now) / 1000));
+      return true;
+    }
+    return false;
+  }
+
+  function showRateLimitWarning(seconds: number) {
+    rateLimitWarning?.classList.remove('hidden');
+    errorMessage?.classList.add('hidden');
+    if (retryTimer) retryTimer.textContent = seconds.toString();
+    submitBtn.disabled = true;
+
+    const interval = setInterval(() => {
+      seconds--;
+      if (retryTimer) retryTimer.textContent = seconds.toString();
+      if (seconds <= 0) {
+        clearInterval(interval);
+        rateLimitWarning?.classList.add('hidden');
+        submitBtn.disabled = false;
+        // Reset attempts after lockout
+        attempts = 0;
+        localStorage.setItem('loginAttempts', '0');
+        localStorage.removeItem('loginLockoutUntil');
+      }
+    }, 1000);
+  }
+
+  function showError(message: string) {
+    errorMessage.textContent = message;
+    errorMessage?.classList.remove('hidden');
+    rateLimitWarning?.classList.add('hidden');
+  }
+
+  function hideError() {
+    errorMessage?.classList.add('hidden');
+  }
+
+  // Check lockout on page load
+  if (checkLockout()) {
+    // Already showing lockout message
+  }
+
+  // Check if already logged in
+  supabase.auth.getSession().then(({ data: { session } }) => {
+    if (session) {
+      // Redirect to portal or intended destination
+      const redirectTo = new URLSearchParams(window.location.search).get('redirectTo') || '/portal';
+      window.location.href = redirectTo;
+    }
+  });
+
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    hideError();
+
+    // Check lockout
+    if (checkLockout()) {
+      return;
+    }
+
+    const formData = new FormData(form);
+    const email = formData.get('email') as string;
+    const password = formData.get('password') as string;
+
+    // Disable button and show loading
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Signing in...';
+
+    try {
+      // Server-side rate limiting check
+      const rateLimitResponse = await fetch('/api/auth/check-rate-limit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'login' }),
+      });
+
+      if (rateLimitResponse.status === 429) {
+        const data = await rateLimitResponse.json();
+        const lockoutTime = Date.now() + (data.retryAfter * 1000);
+        localStorage.setItem('loginLockoutUntil', lockoutTime.toString());
+        lockoutUntil = lockoutTime;
+        showRateLimitWarning(data.retryAfter);
+        return;
+      }
+
+      // Attempt login
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        attempts++;
+        localStorage.setItem('loginAttempts', attempts.toString());
+
+        if (attempts >= MAX_ATTEMPTS) {
+          const lockoutTime = Date.now() + (LOCKOUT_DURATION * 1000);
+          localStorage.setItem('loginLockoutUntil', lockoutTime.toString());
+          lockoutUntil = lockoutTime;
+          showRateLimitWarning(LOCKOUT_DURATION);
+          return;
+        }
+
+        if (error.message.includes('Invalid login credentials')) {
+          showError('Invalid email or password. Please try again.');
+        } else if (error.message.includes('Email not confirmed')) {
+          showError('Please verify your email address before signing in. Check your inbox for the confirmation link.');
+        } else {
+          showError(error.message);
+        }
+        return;
+      }
+
+      // Success - reset attempts
+      localStorage.setItem('loginAttempts', '0');
+      localStorage.removeItem('loginLockoutUntil');
+
+      // Sync session to HTTP-only cookies for server-side auth
+      if (data.session) {
+        try {
+          await fetch('/api/auth/session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              access_token: data.session.access_token,
+              refresh_token: data.session.refresh_token,
+            }),
+          });
+        } catch (syncError) {
+          console.error('Failed to sync session:', syncError);
+        }
+      }
+
+      const redirectTo = new URLSearchParams(window.location.search).get('redirectTo') || '/portal';
+      window.location.href = redirectTo;
+
+    } catch (err) {
+      showError('An unexpected error occurred. Please try again.');
+      console.error('Login error:', err);
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Sign In';
+    }
+  });
+</script>

@@ -1,0 +1,60 @@
+---
+/**
+ * Badge Component
+ * Status indicators and labels
+ */
+
+interface Props {
+  variant?: 'default' | 'gold' | 'success' | 'warning' | 'error' | 'info';
+  size?: 'sm' | 'md' | 'lg';
+  dot?: boolean;
+  class?: string;
+}
+
+const {
+  variant = 'default',
+  size = 'md',
+  dot = false,
+  class: className = '',
+} = Astro.props;
+
+const baseStyles = 'inline-flex items-center font-medium rounded-full';
+
+const variants = {
+  default: 'bg-primary-hoverBlack text-text-secondary',
+  gold: 'bg-accent-gold/20 text-accent-gold',
+  success: 'bg-status-success/20 text-status-success',
+  warning: 'bg-status-warning/20 text-status-warning',
+  error: 'bg-status-error/20 text-status-error',
+  info: 'bg-status-info/20 text-status-info',
+};
+
+const sizes = {
+  sm: 'px-2 py-0.5 text-xs',
+  md: 'px-2.5 py-1 text-sm',
+  lg: 'px-3 py-1.5 text-base',
+};
+
+const dotColors = {
+  default: 'bg-text-secondary',
+  gold: 'bg-accent-gold',
+  success: 'bg-status-success',
+  warning: 'bg-status-warning',
+  error: 'bg-status-error',
+  info: 'bg-status-info',
+};
+
+const classes = [
+  baseStyles,
+  variants[variant],
+  sizes[size],
+  className,
+].filter(Boolean).join(' ');
+---
+
+<span class={classes}>
+  {dot && (
+    <span class={`w-1.5 h-1.5 rounded-full mr-1.5 ${dotColors[variant]}`}></span>
+  )}
+  <slot />
+</span>

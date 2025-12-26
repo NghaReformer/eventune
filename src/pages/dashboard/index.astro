@@ -1,0 +1,333 @@
+---
+/**
+ * Customer Dashboard - Main Overview
+ * Shows order stats, recent orders, and quick actions
+ *
+ * Security: Uses session from layout, server-side data fetching
+ */
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import { getServerClient } from '../../lib/supabase/server';
+import { getFirstName, type SessionData } from '../../lib/auth/session';
+
+// Get session from layout (already validated)
+const session = Astro.locals.session as SessionData | undefined;
+
+if (!session) {
+  return Astro.redirect('/auth/login?redirect=/dashboard');
+}
+
+const { user, profile } = session;
+const firstName = getFirstName(profile);
+
+// Fetch data using server client
+const supabase = getServerClient();
+let orders: any[] = [];
+let stats = { total: 0, pending: 0, inProgress: 0, completed: 0 };
+let fetchError: string | null = null;
+
+try {
+  // Fetch recent orders with count for stats (single optimized query)
+  const { data: ordersData, error } = await supabase
+    .from('orders')
+    .select('*')
+    .eq('customer_id', user.id)
+    .order('created_at', { ascending: false })
+    .limit(100); // Limit for stats calculation
+
+  if (error) {
+    console.error('Error fetching orders:', error);
+    fetchError = 'Unable to load orders. Please refresh the page.';
+  } else {
+    orders = ordersData || [];
+
+    // Calculate stats from fetched orders (avoid N+1)
+    stats.total = orders.length;
+    stats.pending = orders.filter(o =>
+      o.status === 'pending' || o.status === 'payment_pending'
+    ).length;
+    stats.inProgress = orders.filter(o =>
+      ['in_progress', 'composing', 'recording', 'mixing', 'review'].includes(o.status)
+    ).length;
+    stats.completed = orders.filter(o =>
+      o.status === 'completed' || o.status === 'delivered'
+    ).length;
+  }
+} catch (err) {
+  console.error('Dashboard data fetch error:', err);
+  fetchError = 'Something went wrong. Please try again.';
+}
+
+// Status color mapping
+const statusColors: Record<string, { bg: string; text: string; dot: string }> = {
+  pending: { bg: 'bg-amber-500/10', text: 'text-amber-400', dot: 'bg-amber-400' },
+  payment_pending: { bg: 'bg-amber-500/10', text: 'text-amber-400', dot: 'bg-amber-400' },
+  in_progress: { bg: 'bg-blue-500/10', text: 'text-blue-400', dot: 'bg-blue-400' },
+  composing: { bg: 'bg-blue-500/10', text: 'text-blue-400', dot: 'bg-blue-400' },
+  recording: { bg: 'bg-purple-500/10', text: 'text-purple-400', dot: 'bg-purple-400' },
+  mixing: { bg: 'bg-indigo-500/10', text: 'text-indigo-400', dot: 'bg-indigo-400' },
+  review: { bg: 'bg-cyan-500/10', text: 'text-cyan-400', dot: 'bg-cyan-400' },
+  completed: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', dot: 'bg-emerald-400' },
+  delivered: { bg: 'bg-gold/10', text: 'text-gold', dot: 'bg-gold' },
+};
+
+function getStatusColor(status: string) {
+  return statusColors[status] || statusColors.pending;
+}
+
+function formatDate(date: string) {
+  return new Date(date).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  });
+}
+
+function formatCurrency(amount: number, currency: string) {
+  if (currency === 'XAF') {
+    return `${amount.toLocaleString()} XAF`;
+  }
+  return `$${amount}`;
+}
+---
+
+<DashboardLayout title="Dashboard" activeNav="dashboard">
+  <!-- Welcome Section -->
+  <div class="mb-10">
+    <h2 class="font-display text-2xl text-studio-cream mb-2">
+      Welcome back, <span class="text-gold">{firstName}</span>
+    </h2>
+    <p class="text-studio-cream/50">
+      {stats.total === 0
+        ? "Ready to create your first personalized song?"
+        : `You have ${stats.inProgress} order${stats.inProgress !== 1 ? 's' : ''} in progress`}
+    </p>
+  </div>
+
+  <!-- Stats Grid -->
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
+    <!-- Total Orders -->
+    <div class="stat-card group">
+      <div class="stat-icon bg-gold/10">
+        <svg class="w-6 h-6 text-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+        </svg>
+      </div>
+      <div class="stat-content">
+        <p class="stat-value">{stats.total}</p>
+        <p class="stat-label">Total Orders</p>
+      </div>
+      <div class="stat-bar bg-gold"></div>
+    </div>
+
+    <!-- Pending -->
+    <div class="stat-card group">
+      <div class="stat-icon bg-amber-500/10">
+        <svg class="w-6 h-6 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      </div>
+      <div class="stat-content">
+        <p class="stat-value text-amber-400">{stats.pending}</p>
+        <p class="stat-label">Pending</p>
+      </div>
+      <div class="stat-bar bg-amber-400"></div>
+    </div>
+
+    <!-- In Progress -->
+    <div class="stat-card group">
+      <div class="stat-icon bg-blue-500/10">
+        <svg class="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+      </div>
+      <div class="stat-content">
+        <p class="stat-value text-blue-400">{stats.inProgress}</p>
+        <p class="stat-label">In Progress</p>
+      </div>
+      <div class="stat-bar bg-blue-400"></div>
+    </div>
+
+    <!-- Completed -->
+    <div class="stat-card group">
+      <div class="stat-icon bg-emerald-500/10">
+        <svg class="w-6 h-6 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      </div>
+      <div class="stat-content">
+        <p class="stat-value text-emerald-400">{stats.completed}</p>
+        <p class="stat-label">Completed</p>
+      </div>
+      <div class="stat-bar bg-emerald-400"></div>
+    </div>
+  </div>
+
+  <!-- Quick Actions -->
+  <div class="flex flex-wrap gap-4 mb-10">
+    <a
+      href="/services"
+      class="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-gold to-gold-dark text-studio-black font-semibold rounded-lg hover:shadow-lg hover:shadow-gold/20 transition-all duration-300 group"
+    >
+      <svg class="w-5 h-5 group-hover:rotate-12 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+      </svg>
+      Create New Song
+    </a>
+    {stats.total > 0 && (
+      <a
+        href="/dashboard/orders"
+        class="inline-flex items-center gap-2 px-6 py-3 border border-gold/30 text-gold font-medium rounded-lg hover:bg-gold/10 hover:border-gold/50 transition-all duration-300"
+      >
+        View All Orders
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+        </svg>
+      </a>
+    )}
+  </div>
+
+  <!-- Recent Orders -->
+  <section>
+    <div class="flex items-center justify-between mb-6">
+      <h3 class="font-display text-xl text-studio-cream">Recent Orders</h3>
+      {orders.length > 3 && (
+        <a href="/dashboard/orders" class="text-sm text-gold hover:text-gold-dark transition-colors">
+          View all &rarr;
+        </a>
+      )}
+    </div>
+
+    {orders.length === 0 ? (
+      <div class="empty-state">
+        <div class="empty-icon">
+          <svg class="w-16 h-16 text-gold/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+          </svg>
+        </div>
+        <h4 class="text-lg font-display text-studio-cream mb-2">No orders yet</h4>
+        <p class="text-studio-cream/50 mb-6">Start your musical journey by ordering your first personalized song.</p>
+        <a
+          href="/services"
+          class="inline-flex items-center gap-2 px-6 py-3 bg-gold text-studio-black font-semibold rounded-lg hover:bg-gold-dark transition-colors"
+        >
+          Browse Services
+        </a>
+      </div>
+    ) : (
+      <div class="space-y-4">
+        {orders.slice(0, 3).map((order) => {
+          const colors = getStatusColor(order.status);
+          return (
+            <a
+              href={`/dashboard/orders/${order.id}`}
+              class="order-card group"
+            >
+              <div class="flex items-center gap-4 flex-1">
+                <!-- Order Icon -->
+                <div class="w-12 h-12 rounded-lg bg-gold/10 flex items-center justify-center flex-shrink-0">
+                  <svg class="w-6 h-6 text-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                  </svg>
+                </div>
+
+                <!-- Order Details -->
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-3 mb-1">
+                    <span class="font-mono text-sm text-gold">{order.order_number}</span>
+                    <span class={`status-badge ${colors.bg} ${colors.text}`}>
+                      <span class={`w-1.5 h-1.5 rounded-full ${colors.dot}`}></span>
+                      {order.status.replace(/_/g, ' ')}
+                    </span>
+                  </div>
+                  <p class="text-studio-cream truncate">
+                    {order.occasion_slug?.replace(/-/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
+                    <span class="text-studio-cream/30 mx-2">•</span>
+                    <span class="text-studio-cream/60">{order.package_slug?.replace(/-/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}</span>
+                  </p>
+                </div>
+              </div>
+
+              <!-- Order Meta -->
+              <div class="flex items-center gap-6 mt-4 lg:mt-0">
+                <div class="text-right">
+                  <p class="text-sm text-studio-cream/50">Amount</p>
+                  <p class="font-semibold text-studio-cream">{formatCurrency(order.amount_expected, order.currency)}</p>
+                </div>
+                <div class="text-right">
+                  <p class="text-sm text-studio-cream/50">Date</p>
+                  <p class="text-studio-cream/80">{formatDate(order.created_at)}</p>
+                </div>
+                <svg class="w-5 h-5 text-studio-cream/30 group-hover:text-gold group-hover:translate-x-1 transition-all" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
+            </a>
+          );
+        })}
+      </div>
+    )}
+  </section>
+</DashboardLayout>
+
+<style>
+  :root {
+    --studio-black: #0A0A0A;
+    --studio-card: #141414;
+    --studio-cream: #F5F5F5;
+    --gold: #D4AF37;
+    --gold-dark: #B8962E;
+  }
+
+  .bg-studio-black { background-color: var(--studio-black); }
+  .bg-studio-card { background-color: var(--studio-card); }
+  .text-studio-cream { color: var(--studio-cream); }
+  .text-gold { color: var(--gold); }
+  .bg-gold { background-color: var(--gold); }
+  .border-gold { border-color: var(--gold); }
+  .font-display { font-family: 'Playfair Display', serif; }
+
+  .stat-card {
+    @apply relative bg-studio-card border border-gold/10 rounded-xl p-5 overflow-hidden;
+    @apply hover:border-gold/30 transition-all duration-300;
+  }
+
+  .stat-icon {
+    @apply w-12 h-12 rounded-lg flex items-center justify-center mb-4;
+  }
+
+  .stat-content {
+    @apply relative z-10;
+  }
+
+  .stat-value {
+    @apply text-3xl font-bold text-studio-cream mb-1;
+    font-family: 'Playfair Display', serif;
+  }
+
+  .stat-label {
+    @apply text-sm text-studio-cream/50;
+  }
+
+  .stat-bar {
+    @apply absolute bottom-0 left-0 right-0 h-1 opacity-0 group-hover:opacity-100 transition-opacity;
+  }
+
+  .order-card {
+    @apply flex flex-col lg:flex-row lg:items-center justify-between;
+    @apply bg-studio-card border border-gold/10 rounded-xl p-5;
+    @apply hover:border-gold/30 hover:bg-studio-card/80 transition-all duration-300;
+  }
+
+  .status-badge {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium uppercase tracking-wider;
+  }
+
+  .empty-state {
+    @apply flex flex-col items-center justify-center text-center py-16 px-6;
+    @apply bg-studio-card border border-dashed border-gold/20 rounded-xl;
+  }
+
+  .empty-icon {
+    @apply w-24 h-24 rounded-full bg-gold/5 flex items-center justify-center mb-6;
+  }
+</style>

@@ -1,0 +1,764 @@
+---
+/**
+ * Admin Dashboard - Overview
+ * Command center with key metrics, recent orders, and quick actions
+ *
+ * Security: Admin role required
+ */
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { getAdminStats, getRecentOrders, getOrderTrends } from '../../services/admin.service';
+import { getFirstName } from '../../lib/auth/session';
+import { getRoleDisplayName, hasPermission } from '../../lib/auth/admin-session';
+import type { AdminSessionData } from '../../lib/auth/admin-session';
+
+// Get admin session from layout
+const adminSession = Astro.locals.adminSession as AdminSessionData;
+const { profile, adminRole, permissions } = adminSession;
+const firstName = getFirstName(profile);
+
+// Fetch dashboard data
+const [stats, recentOrders, trends] = await Promise.all([
+  getAdminStats(),
+  getRecentOrders(10),
+  getOrderTrends(),
+]);
+
+// Status color mapping
+const statusColors: Record<string, { bg: string; text: string; dot: string }> = {
+  pending: { bg: 'bg-amber-500/10', text: 'text-amber-400', dot: 'bg-amber-400' },
+  payment_pending: { bg: 'bg-amber-500/10', text: 'text-amber-400', dot: 'bg-amber-400' },
+  paid: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', dot: 'bg-emerald-400' },
+  in_progress: { bg: 'bg-blue-500/10', text: 'text-blue-400', dot: 'bg-blue-400' },
+  composing: { bg: 'bg-blue-500/10', text: 'text-blue-400', dot: 'bg-blue-400' },
+  recording: { bg: 'bg-purple-500/10', text: 'text-purple-400', dot: 'bg-purple-400' },
+  mixing: { bg: 'bg-indigo-500/10', text: 'text-indigo-400', dot: 'bg-indigo-400' },
+  review: { bg: 'bg-cyan-500/10', text: 'text-cyan-400', dot: 'bg-cyan-400' },
+  completed: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', dot: 'bg-emerald-400' },
+  delivered: { bg: 'bg-gold/10', text: 'text-gold', dot: 'bg-gold' },
+  cancelled: { bg: 'bg-red-500/10', text: 'text-red-400', dot: 'bg-red-400' },
+};
+
+function getStatusColor(status: string) {
+  return statusColors[status] || statusColors.pending;
+}
+
+function formatCurrency(amount: number, currency: string) {
+  if (currency === 'XAF') {
+    return `${amount.toLocaleString()} XAF`;
+  }
+  return `$${amount.toLocaleString()}`;
+}
+
+function formatDate(date: string) {
+  return new Date(date).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function formatRelativeTime(date: string) {
+  const now = new Date();
+  const then = new Date(date);
+  const diffMs = now.getTime() - then.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  return `${diffDays}d ago`;
+}
+
+const canViewAnalytics = hasPermission(permissions, 'analytics:view');
+const canManageContent = hasPermission(permissions, 'content:update');
+---
+
+<AdminLayout title="Dashboard" activeNav="dashboard">
+  <!-- Welcome Section -->
+  <div class="mb-8">
+    <div class="flex items-center gap-4 mb-2">
+      <h2 class="font-display text-2xl text-admin-cream">
+        Welcome back, <span class="text-gold">{firstName}</span>
+      </h2>
+      <span class="live-indicator">
+        <span class="live-dot"></span>
+        Live
+      </span>
+    </div>
+    <p class="text-admin-cream/50">
+      Here's what's happening with Eventune Studios today.
+    </p>
+  </div>
+
+  <!-- Stats Grid -->
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+    <!-- Total Orders -->
+    <div class="stat-card group">
+      <div class="stat-icon bg-gold/10">
+        <svg class="w-6 h-6 text-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+        </svg>
+      </div>
+      <div class="stat-content">
+        <p class="stat-value">{stats.totalOrders}</p>
+        <p class="stat-label">Total Orders</p>
+      </div>
+      <div class="stat-trend positive">
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+        </svg>
+        <span>{stats.ordersThisWeek} this week</span>
+      </div>
+      <div class="stat-glow bg-gold"></div>
+    </div>
+
+    <!-- Revenue USD -->
+    <div class="stat-card group">
+      <div class="stat-icon bg-emerald-500/10">
+        <svg class="w-6 h-6 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      </div>
+      <div class="stat-content">
+        <p class="stat-value text-emerald-400">${stats.revenueUSD.toLocaleString()}</p>
+        <p class="stat-label">Revenue (USD)</p>
+      </div>
+      <div class="stat-glow bg-emerald-400"></div>
+    </div>
+
+    <!-- Pending Orders -->
+    <div class="stat-card group">
+      <div class="stat-icon bg-amber-500/10">
+        <svg class="w-6 h-6 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      </div>
+      <div class="stat-content">
+        <p class="stat-value text-amber-400">{stats.pendingOrders}</p>
+        <p class="stat-label">Pending</p>
+      </div>
+      {stats.pendingOrders > 0 && (
+        <div class="stat-alert">
+          <span class="alert-dot"></span>
+          Needs attention
+        </div>
+      )}
+      <div class="stat-glow bg-amber-400"></div>
+    </div>
+
+    <!-- Completed Today -->
+    <div class="stat-card group">
+      <div class="stat-icon bg-blue-500/10">
+        <svg class="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      </div>
+      <div class="stat-content">
+        <p class="stat-value text-blue-400">{stats.completedToday}</p>
+        <p class="stat-label">Completed Today</p>
+      </div>
+      <div class="stat-glow bg-blue-400"></div>
+    </div>
+  </div>
+
+  <!-- Revenue XAF Card (Secondary) -->
+  {canViewAnalytics && (
+    <div class="mb-8 p-4 bg-admin-card border border-gold/10 rounded-xl flex items-center justify-between">
+      <div class="flex items-center gap-4">
+        <div class="w-12 h-12 rounded-lg bg-purple-500/10 flex items-center justify-center">
+          <svg class="w-6 h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
+          </svg>
+        </div>
+        <div>
+          <p class="text-sm text-admin-cream/50">Cameroon Revenue (XAF)</p>
+          <p class="text-2xl font-display text-purple-400">{stats.revenueXAF.toLocaleString()} XAF</p>
+        </div>
+      </div>
+      <div class="text-right">
+        <p class="text-sm text-admin-cream/50">Customers</p>
+        <p class="text-xl font-semibold text-admin-cream">{stats.customersTotal}</p>
+      </div>
+    </div>
+  )}
+
+  <!-- Charts Row -->
+  {canViewAnalytics && (
+    <div class="grid lg:grid-cols-2 gap-6 mb-8">
+      <!-- Orders Chart -->
+      <div class="chart-card">
+        <div class="chart-header">
+          <h3 class="font-display text-lg text-admin-cream">Orders This Week</h3>
+          <span class="chart-badge">7 days</span>
+        </div>
+        <div class="chart-container">
+          <div class="mini-chart" id="orders-chart">
+            {trends.labels.map((label, i) => (
+              <div class="chart-bar-container">
+                <div
+                  class="chart-bar bg-gold"
+                  style={`height: ${Math.max(10, (trends.orders[i] / Math.max(...trends.orders, 1)) * 100)}%;`}
+                >
+                  <span class="chart-tooltip">{trends.orders[i]} orders</span>
+                </div>
+                <span class="chart-label">{label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <!-- Revenue Chart -->
+      <div class="chart-card">
+        <div class="chart-header">
+          <h3 class="font-display text-lg text-admin-cream">Revenue Trend</h3>
+          <span class="chart-badge">7 days</span>
+        </div>
+        <div class="chart-container">
+          <div class="mini-chart" id="revenue-chart">
+            {trends.labels.map((label, i) => (
+              <div class="chart-bar-container">
+                <div
+                  class="chart-bar bg-emerald-400"
+                  style={`height: ${Math.max(10, (trends.revenue[i] / Math.max(...trends.revenue, 1)) * 100)}%;`}
+                >
+                  <span class="chart-tooltip">${trends.revenue[i]}</span>
+                </div>
+                <span class="chart-label">{label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  )}
+
+  <!-- Quick Actions -->
+  <div class="flex flex-wrap gap-3 mb-8">
+    <a href="/admin/orders" class="action-btn primary">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+      </svg>
+      View All Orders
+    </a>
+    {canManageContent && (
+      <a href="/admin/content" class="action-btn secondary">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+        </svg>
+        Manage Content
+      </a>
+    )}
+    {canViewAnalytics && (
+      <a href="/admin/analytics" class="action-btn secondary">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+        </svg>
+        View Analytics
+      </a>
+    )}
+  </div>
+
+  <!-- Recent Orders -->
+  <section class="orders-section">
+    <div class="section-header">
+      <h3 class="font-display text-xl text-admin-cream">Recent Orders</h3>
+      <a href="/admin/orders" class="view-all-link">
+        View all
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+        </svg>
+      </a>
+    </div>
+
+    {recentOrders.length === 0 ? (
+      <div class="empty-state">
+        <div class="empty-icon">
+          <svg class="w-12 h-12 text-gold/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+          </svg>
+        </div>
+        <p class="text-admin-cream/50">No orders yet</p>
+      </div>
+    ) : (
+      <div class="orders-table-wrapper">
+        <table class="orders-table">
+          <thead>
+            <tr>
+              <th>Order</th>
+              <th>Customer</th>
+              <th>Package</th>
+              <th>Status</th>
+              <th>Amount</th>
+              <th>Date</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {recentOrders.map((order) => {
+              const colors = getStatusColor(order.status);
+              return (
+                <tr class="order-row">
+                  <td>
+                    <span class="order-number">{order.order_number}</span>
+                  </td>
+                  <td>
+                    <div class="customer-cell">
+                      <span class="customer-name">{order.customer_name || 'N/A'}</span>
+                      <span class="customer-email">{order.customer_email}</span>
+                    </div>
+                  </td>
+                  <td>
+                    <span class="package-badge">{order.package_slug?.replace(/-/g, ' ')}</span>
+                  </td>
+                  <td>
+                    <span class={`status-badge ${colors.bg} ${colors.text}`}>
+                      <span class={`status-dot ${colors.dot}`}></span>
+                      {order.status.replace(/_/g, ' ')}
+                    </span>
+                  </td>
+                  <td>
+                    <span class="amount">{formatCurrency(order.amount_expected, order.currency)}</span>
+                  </td>
+                  <td>
+                    <span class="date">{formatRelativeTime(order.created_at)}</span>
+                  </td>
+                  <td>
+                    <a href={`/admin/orders/${order.id}`} class="view-btn">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                      </svg>
+                    </a>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    )}
+  </section>
+</AdminLayout>
+
+<style>
+  :root {
+    --admin-black: #0A0A0A;
+    --admin-card: #111111;
+    --admin-cream: #F5F5F5;
+    --gold: #D4AF37;
+  }
+
+  .font-display { font-family: 'Playfair Display', serif; }
+
+  /* Live Indicator */
+  .live-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0.75rem;
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    color: #10b981;
+    font-weight: 500;
+  }
+
+  .live-dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    background: #10b981;
+    border-radius: 9999px;
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  /* Stats Cards */
+  .stat-card {
+    position: relative;
+    background: var(--admin-card);
+    border: 1px solid rgba(212, 175, 55, 0.08);
+    border-radius: 1rem;
+    padding: 1.25rem;
+    overflow: hidden;
+    transition: all 0.3s ease;
+  }
+
+  .stat-card:hover {
+    border-color: rgba(212, 175, 55, 0.2);
+    transform: translateY(-2px);
+  }
+
+  .stat-icon {
+    width: 3rem;
+    height: 3rem;
+    border-radius: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1rem;
+  }
+
+  .stat-content {
+    position: relative;
+    z-index: 1;
+  }
+
+  .stat-value {
+    font-family: 'Playfair Display', serif;
+    font-size: 2rem;
+    font-weight: 600;
+    color: var(--admin-cream);
+    line-height: 1;
+    margin-bottom: 0.25rem;
+  }
+
+  .stat-label {
+    font-size: 0.875rem;
+    color: rgba(245, 245, 245, 0.5);
+  }
+
+  .stat-trend {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin-top: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.5rem;
+    font-size: 0.75rem;
+  }
+
+  .stat-trend.positive {
+    background: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+  }
+
+  .stat-alert {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    margin-top: 0.75rem;
+    font-size: 0.75rem;
+    color: #fbbf24;
+  }
+
+  .alert-dot {
+    width: 0.375rem;
+    height: 0.375rem;
+    background: #fbbf24;
+    border-radius: 9999px;
+    animation: pulse 1.5s infinite;
+  }
+
+  .stat-glow {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  .stat-card:hover .stat-glow {
+    opacity: 0.6;
+  }
+
+  /* Chart Cards */
+  .chart-card {
+    background: var(--admin-card);
+    border: 1px solid rgba(212, 175, 55, 0.08);
+    border-radius: 1rem;
+    padding: 1.5rem;
+  }
+
+  .chart-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+  }
+
+  .chart-badge {
+    padding: 0.25rem 0.75rem;
+    background: rgba(212, 175, 55, 0.1);
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    color: var(--gold);
+  }
+
+  .chart-container {
+    height: 150px;
+  }
+
+  .mini-chart {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    height: 100%;
+    gap: 0.5rem;
+  }
+
+  .chart-bar-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100%;
+  }
+
+  .chart-bar {
+    position: relative;
+    width: 100%;
+    max-width: 2rem;
+    border-radius: 0.25rem 0.25rem 0 0;
+    transition: all 0.3s ease;
+    cursor: pointer;
+  }
+
+  .chart-bar:hover {
+    opacity: 0.8;
+    transform: scaleY(1.05);
+    transform-origin: bottom;
+  }
+
+  .chart-tooltip {
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 0.25rem 0.5rem;
+    background: var(--admin-black);
+    border: 1px solid rgba(212, 175, 55, 0.2);
+    border-radius: 0.25rem;
+    font-size: 0.65rem;
+    color: var(--admin-cream);
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+    z-index: 10;
+  }
+
+  .chart-bar:hover .chart-tooltip {
+    opacity: 1;
+  }
+
+  .chart-label {
+    margin-top: 0.5rem;
+    font-size: 0.65rem;
+    color: rgba(245, 245, 245, 0.4);
+  }
+
+  /* Action Buttons */
+  .action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.25rem;
+    border-radius: 0.75rem;
+    font-weight: 500;
+    font-size: 0.875rem;
+    transition: all 0.2s ease;
+  }
+
+  .action-btn.primary {
+    background: linear-gradient(135deg, var(--gold) 0%, #B8962E 100%);
+    color: var(--admin-black);
+  }
+
+  .action-btn.primary:hover {
+    box-shadow: 0 4px 20px rgba(212, 175, 55, 0.3);
+  }
+
+  .action-btn.secondary {
+    background: rgba(212, 175, 55, 0.1);
+    border: 1px solid rgba(212, 175, 55, 0.2);
+    color: var(--gold);
+  }
+
+  .action-btn.secondary:hover {
+    background: rgba(212, 175, 55, 0.15);
+    border-color: rgba(212, 175, 55, 0.3);
+  }
+
+  /* Orders Section */
+  .orders-section {
+    background: var(--admin-card);
+    border: 1px solid rgba(212, 175, 55, 0.08);
+    border-radius: 1rem;
+    overflow: hidden;
+  }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid rgba(212, 175, 55, 0.08);
+  }
+
+  .view-all-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.875rem;
+    color: var(--gold);
+    transition: all 0.2s ease;
+  }
+
+  .view-all-link:hover {
+    gap: 0.5rem;
+  }
+
+  /* Orders Table */
+  .orders-table-wrapper {
+    overflow-x: auto;
+  }
+
+  .orders-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .orders-table th {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: rgba(245, 245, 245, 0.4);
+    background: rgba(0, 0, 0, 0.3);
+  }
+
+  .orders-table th:first-child {
+    padding-left: 1.5rem;
+  }
+
+  .order-row {
+    border-bottom: 1px solid rgba(212, 175, 55, 0.05);
+    transition: background 0.2s ease;
+  }
+
+  .order-row:hover {
+    background: rgba(212, 175, 55, 0.03);
+  }
+
+  .order-row td {
+    padding: 1rem;
+  }
+
+  .order-row td:first-child {
+    padding-left: 1.5rem;
+  }
+
+  .order-number {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.875rem;
+    color: var(--gold);
+  }
+
+  .customer-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+
+  .customer-name {
+    font-weight: 500;
+    color: var(--admin-cream);
+    font-size: 0.875rem;
+  }
+
+  .customer-email {
+    font-size: 0.75rem;
+    color: rgba(245, 245, 245, 0.4);
+  }
+
+  .package-badge {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    background: rgba(212, 175, 55, 0.1);
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    color: var(--gold);
+    text-transform: capitalize;
+  }
+
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.25rem 0.625rem;
+    border-radius: 9999px;
+    font-size: 0.7rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .status-dot {
+    width: 0.375rem;
+    height: 0.375rem;
+    border-radius: 9999px;
+  }
+
+  .amount {
+    font-weight: 600;
+    color: var(--admin-cream);
+    font-size: 0.875rem;
+  }
+
+  .date {
+    font-size: 0.8rem;
+    color: rgba(245, 245, 245, 0.5);
+  }
+
+  .view-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 0.5rem;
+    color: rgba(245, 245, 245, 0.4);
+    transition: all 0.2s ease;
+  }
+
+  .view-btn:hover {
+    background: rgba(212, 175, 55, 0.1);
+    color: var(--gold);
+  }
+
+  /* Empty State */
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem;
+    text-align: center;
+  }
+
+  .empty-icon {
+    width: 4rem;
+    height: 4rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1rem;
+  }
+
+  /* Color utilities */
+  .text-gold { color: var(--gold); }
+  .text-admin-cream { color: var(--admin-cream); }
+  .bg-gold { background-color: var(--gold); }
+  .bg-admin-card { background-color: var(--admin-card); }
+</style>

@@ -1,0 +1,38 @@
+---
+/**
+ * Logout Page
+ * Signs out the user and redirects to home
+ */
+
+// Clear any server-side session data
+Astro.cookies.delete('sb-access-token', { path: '/' });
+Astro.cookies.delete('sb-refresh-token', { path: '/' });
+---
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Logging out...</title>
+</head>
+<body>
+  <script type="module">
+    import { supabase } from '@/lib/supabase/client';
+
+    async function logout() {
+      try {
+        await supabase.auth.signOut();
+      } catch (error) {
+        console.error('Logout error:', error);
+      } finally {
+        window.location.href = '/';
+      }
+    }
+
+    logout();
+  </script>
+  <noscript>
+    <meta http-equiv="refresh" content="0;url=/" />
+  </noscript>
+</body>
+</html>

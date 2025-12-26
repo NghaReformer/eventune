@@ -1,0 +1,499 @@
+---
+/**
+ * Checkout Page
+ * Payment processing for orders
+ */
+
+import PublicLayout from '@/layouts/PublicLayout.astro';
+import Card from '@/components/ui/Card.astro';
+import Button from '@/components/ui/Button.astro';
+import Spinner from '@/components/ui/Spinner.astro';
+
+// Get query parameters
+const url = new URL(Astro.request.url);
+const orderId = url.searchParams.get('order_id');
+const currency = url.searchParams.get('currency') || 'USD';
+
+if (!orderId) {
+  return Astro.redirect('/services');
+}
+---
+
+<PublicLayout
+  title="Checkout | Eventune Studios"
+  description="Complete your order for a custom song."
+>
+  <!-- Steps Indicator -->
+  <section class="py-8 bg-primary-cardBlack border-b border-text-muted/20">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-center gap-2 md:gap-4">
+        {[
+          { step: 1, label: 'Choose Package', completed: true },
+          { step: 2, label: 'Tell Your Story', completed: true },
+          { step: 3, label: 'Checkout', active: true },
+        ].map(({ step, label, active, completed }) => (
+          <div class="flex items-center">
+            <div class={`flex items-center gap-2 ${active ? 'text-accent-gold' : completed ? 'text-status-success' : 'text-text-muted'}`}>
+              <div class={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                active ? 'bg-accent-gold text-primary-black' :
+                completed ? 'bg-status-success text-primary-black' : 'bg-text-muted/20'
+              }`}>
+                {completed ? (
+                  <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                  </svg>
+                ) : step}
+              </div>
+              <span class="hidden sm:inline text-sm font-medium">{label}</span>
+            </div>
+            {step < 3 && (
+              <div class="w-8 md:w-16 h-0.5 bg-status-success mx-2"></div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- Checkout Content -->
+  <section class="py-12 md:py-16">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+      <!-- Loading State -->
+      <div id="loading-state" class="text-center py-12">
+        <Spinner size="lg" />
+        <p class="text-text-secondary mt-4">Loading order details...</p>
+      </div>
+
+      <!-- Error State -->
+      <div id="error-state" class="hidden">
+        <Card variant="elevated" class="text-center py-12">
+          <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-status-error/20 flex items-center justify-center">
+            <svg class="w-8 h-8 text-status-error" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <h2 class="text-xl font-heading font-bold text-text-primary mb-2">
+            Order Not Found
+          </h2>
+          <p id="error-message" class="text-text-secondary mb-6">
+            We couldn't find this order. It may have expired or already been completed.
+          </p>
+          <a
+            href="/services"
+            class="inline-flex items-center justify-center px-6 py-3 bg-accent-gold text-primary-black rounded-lg hover:bg-accent-goldHover transition-colors"
+          >
+            Start New Order
+          </a>
+        </Card>
+      </div>
+
+      <!-- Checkout Form -->
+      <div id="checkout-content" class="hidden space-y-8">
+        <div class="text-center">
+          <h1 class="text-3xl md:text-4xl font-heading font-bold text-text-primary mb-2">
+            Complete Your Order
+          </h1>
+          <p class="text-text-secondary">
+            Review your order and select a payment method.
+          </p>
+        </div>
+
+        <!-- Order Summary -->
+        <Card variant="bordered" class="border-accent-gold/30">
+          <h2 class="text-lg font-heading font-semibold text-text-primary mb-4">
+            Order Summary
+          </h2>
+          <div class="space-y-3">
+            <div class="flex justify-between">
+              <span class="text-text-secondary">Package</span>
+              <span class="text-text-primary font-medium" id="order-package">-</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-text-secondary">Occasion</span>
+              <span class="text-text-primary" id="order-occasion">-</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-text-secondary">Recipient</span>
+              <span class="text-text-primary" id="order-recipient">-</span>
+            </div>
+            <div class="border-t border-text-muted/20 pt-3 mt-3">
+              <div class="flex justify-between items-center">
+                <span class="text-text-primary font-semibold">Total</span>
+                <span class="text-2xl font-bold text-accent-gold" id="order-total">-</span>
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        <!-- Payment Methods -->
+        <Card variant="elevated">
+          <h2 class="text-lg font-heading font-semibold text-text-primary mb-4">
+            Payment Method
+          </h2>
+
+          <!-- USD Payment (Stripe) -->
+          <div id="usd-payment" class={currency === 'USD' ? '' : 'hidden'}>
+            <div id="stripe-payment" class="space-y-4">
+              <p class="text-text-secondary text-sm mb-4">
+                Secure payment powered by Stripe. We accept all major credit and debit cards.
+              </p>
+              <div class="flex items-center gap-2 mb-4">
+                <img src="/images/cards/visa.svg" alt="Visa" class="h-8" />
+                <img src="/images/cards/mastercard.svg" alt="Mastercard" class="h-8" />
+                <img src="/images/cards/amex.svg" alt="Amex" class="h-8" />
+              </div>
+              <Button id="pay-stripe-btn" variant="primary" size="lg" fullWidth>
+                Pay with Card
+              </Button>
+            </div>
+          </div>
+
+          <!-- XAF Payment (Mobile Money) -->
+          <div id="xaf-payment" class={currency === 'XAF' ? '' : 'hidden'}>
+            <div class="space-y-4">
+              <p class="text-text-secondary text-sm mb-4">
+                Pay with MTN Mobile Money or Orange Money.
+              </p>
+
+              <div class="space-y-3" id="mobile-money-options">
+                <label class="payment-option flex items-center gap-4 p-4 border border-text-muted/30 rounded-lg cursor-pointer hover:border-accent-gold transition-colors">
+                  <input type="radio" name="mobile_provider" value="mtn" class="sr-only" checked />
+                  <div class="w-12 h-12 rounded-lg bg-yellow-500 flex items-center justify-center">
+                    <span class="text-black font-bold text-xs">MTN</span>
+                  </div>
+                  <div class="flex-1">
+                    <p class="text-text-primary font-medium">MTN Mobile Money</p>
+                    <p class="text-text-muted text-sm">Pay with your MTN MoMo account</p>
+                  </div>
+                  <div class="w-5 h-5 rounded-full border-2 border-accent-gold flex items-center justify-center check-indicator">
+                    <div class="w-3 h-3 rounded-full bg-accent-gold"></div>
+                  </div>
+                </label>
+
+                <label class="payment-option flex items-center gap-4 p-4 border border-text-muted/30 rounded-lg cursor-pointer hover:border-accent-gold transition-colors">
+                  <input type="radio" name="mobile_provider" value="orange" class="sr-only" />
+                  <div class="w-12 h-12 rounded-lg bg-orange-500 flex items-center justify-center">
+                    <span class="text-white font-bold text-xs">OM</span>
+                  </div>
+                  <div class="flex-1">
+                    <p class="text-text-primary font-medium">Orange Money</p>
+                    <p class="text-text-muted text-sm">Pay with your Orange Money account</p>
+                  </div>
+                  <div class="w-5 h-5 rounded-full border-2 border-text-muted/30 flex items-center justify-center check-indicator">
+                  </div>
+                </label>
+              </div>
+
+              <div class="mt-4">
+                <label class="block text-sm font-medium text-text-primary mb-2">
+                  Phone Number
+                </label>
+                <input
+                  type="tel"
+                  id="phone-number"
+                  placeholder="6XXXXXXXX"
+                  class="w-full px-4 py-3 bg-primary-cardBlack border border-text-muted/30 rounded-lg text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-accent-gold/50 focus:border-accent-gold"
+                />
+                <p class="text-text-muted text-xs mt-1">Enter your mobile money number without country code</p>
+              </div>
+
+              <Button id="pay-mobile-btn" variant="primary" size="lg" fullWidth>
+                Pay with Mobile Money
+              </Button>
+            </div>
+          </div>
+        </Card>
+
+        <!-- Processing State -->
+        <div id="processing-state" class="hidden">
+          <Card variant="elevated" class="text-center py-12">
+            <Spinner size="lg" />
+            <h2 class="text-xl font-heading font-bold text-text-primary mt-4 mb-2">
+              Processing Payment
+            </h2>
+            <p class="text-text-secondary" id="processing-message">
+              Please wait while we process your payment...
+            </p>
+          </Card>
+        </div>
+
+        <!-- Security Badge -->
+        <div class="text-center text-text-muted text-sm flex items-center justify-center gap-2">
+          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" />
+          </svg>
+          Secure checkout. Your payment information is encrypted.
+        </div>
+      </div>
+    </div>
+  </section>
+</PublicLayout>
+
+<script>
+  import { supabase } from '@/lib/supabase/client';
+
+  const loadingState = document.getElementById('loading-state');
+  const errorState = document.getElementById('error-state');
+  const checkoutContent = document.getElementById('checkout-content');
+  const processingState = document.getElementById('processing-state');
+  const errorMessage = document.getElementById('error-message');
+
+  // Order display elements
+  const orderPackage = document.getElementById('order-package');
+  const orderOccasion = document.getElementById('order-occasion');
+  const orderRecipient = document.getElementById('order-recipient');
+  const orderTotal = document.getElementById('order-total');
+
+  // Payment buttons
+  const payStripeBtn = document.getElementById('pay-stripe-btn');
+  const payMobileBtn = document.getElementById('pay-mobile-btn');
+
+  // Get order ID from URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const orderId = urlParams.get('order_id');
+  const currency = urlParams.get('currency') || 'USD';
+
+  let orderData: any = null;
+
+  function showError(message: string) {
+    loadingState?.classList.add('hidden');
+    checkoutContent?.classList.add('hidden');
+    errorState?.classList.remove('hidden');
+    if (errorMessage) errorMessage.textContent = message;
+  }
+
+  function showCheckout() {
+    loadingState?.classList.add('hidden');
+    errorState?.classList.add('hidden');
+    checkoutContent?.classList.remove('hidden');
+  }
+
+  function showProcessing(message: string) {
+    const cards = checkoutContent?.querySelectorAll('.card, [class*="Card"]');
+    cards?.forEach((card) => (card as HTMLElement).style.display = 'none');
+    processingState?.classList.remove('hidden');
+    const processingMessage = document.getElementById('processing-message');
+    if (processingMessage) processingMessage.textContent = message;
+  }
+
+  // Mobile money provider selection
+  const paymentOptions = document.querySelectorAll('.payment-option');
+  paymentOptions.forEach((option) => {
+    option.addEventListener('click', () => {
+      paymentOptions.forEach((opt) => {
+        const indicator = opt.querySelector('.check-indicator');
+        indicator?.classList.remove('border-accent-gold');
+        indicator?.classList.add('border-text-muted/30');
+        indicator!.innerHTML = '';
+        opt.classList.remove('border-accent-gold');
+      });
+
+      const indicator = option.querySelector('.check-indicator');
+      indicator?.classList.add('border-accent-gold');
+      indicator?.classList.remove('border-text-muted/30');
+      indicator!.innerHTML = '<div class="w-3 h-3 rounded-full bg-accent-gold"></div>';
+      option.classList.add('border-accent-gold');
+    });
+  });
+
+  async function loadOrder() {
+    if (!orderId) {
+      showError('No order ID provided.');
+      return;
+    }
+
+    try {
+      // Check auth
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        window.location.href = `/auth/login?redirectTo=${encodeURIComponent(window.location.href)}`;
+        return;
+      }
+
+      // Fetch order details
+      const { data: order, error } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          package:config_packages(name, price_usd, price_xaf),
+          occasion:config_occasions(name),
+          questionnaire:questionnaires(recipient_name)
+        `)
+        .eq('id', orderId)
+        .eq('user_id', session.user.id)
+        .single();
+
+      if (error || !order) {
+        showError('Order not found or access denied.');
+        return;
+      }
+
+      if (order.status !== 'pending_payment') {
+        if (order.status === 'paid' || order.status === 'in_production') {
+          window.location.href = `/portal/orders/${orderId}`;
+          return;
+        }
+        showError('This order is no longer available for payment.');
+        return;
+      }
+
+      orderData = order;
+
+      // Display order details
+      if (orderPackage) orderPackage.textContent = order.package?.name || 'Unknown';
+      if (orderOccasion) orderOccasion.textContent = order.occasion?.name || 'Unknown';
+      if (orderRecipient) orderRecipient.textContent = order.questionnaire?.recipient_name || 'Unknown';
+
+      const amount = order.currency === 'USD' ? order.package?.price_usd : order.package?.price_xaf;
+      const formattedAmount = order.currency === 'USD'
+        ? `$${amount}`
+        : `${amount?.toLocaleString()} CFA`;
+      if (orderTotal) orderTotal.textContent = formattedAmount;
+
+      showCheckout();
+
+    } catch (error) {
+      console.error('Load order error:', error);
+      showError('Failed to load order details.');
+    }
+  }
+
+  // Stripe payment
+  payStripeBtn?.addEventListener('click', async () => {
+    if (!orderData) return;
+
+    payStripeBtn.disabled = true;
+    payStripeBtn.textContent = 'Redirecting...';
+
+    try {
+      const response = await fetch('/api/payments/create-stripe-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order_id: orderId }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        alert(result.error || 'Failed to initiate payment.');
+        payStripeBtn.disabled = false;
+        payStripeBtn.textContent = 'Pay with Card';
+        return;
+      }
+
+      // Redirect to Stripe checkout
+      window.location.href = result.checkout_url;
+
+    } catch (error) {
+      console.error('Stripe payment error:', error);
+      alert('Failed to initiate payment. Please try again.');
+      payStripeBtn.disabled = false;
+      payStripeBtn.textContent = 'Pay with Card';
+    }
+  });
+
+  // Mobile money payment
+  payMobileBtn?.addEventListener('click', async () => {
+    if (!orderData) return;
+
+    const phoneInput = document.getElementById('phone-number') as HTMLInputElement;
+    const phone = phoneInput?.value?.trim();
+
+    if (!phone || phone.length < 9) {
+      alert('Please enter a valid phone number.');
+      return;
+    }
+
+    const selectedProvider = document.querySelector('input[name="mobile_provider"]:checked') as HTMLInputElement;
+    const provider = selectedProvider?.value || 'mtn';
+
+    payMobileBtn.disabled = true;
+    showProcessing('Initiating mobile money payment...');
+
+    try {
+      const response = await fetch('/api/payments/create-campay-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          order_id: orderId,
+          phone_number: phone,
+          provider,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        alert(result.error || 'Failed to initiate payment.');
+        checkoutContent?.querySelectorAll('.card, [class*="Card"]').forEach((card) => (card as HTMLElement).style.display = '');
+        processingState?.classList.add('hidden');
+        payMobileBtn.disabled = false;
+        return;
+      }
+
+      // Show waiting for confirmation
+      const processingMessage = document.getElementById('processing-message');
+      if (processingMessage) {
+        processingMessage.textContent = 'Please confirm the payment on your phone. This may take a moment...';
+      }
+
+      // Poll for payment status
+      pollPaymentStatus(result.reference);
+
+    } catch (error) {
+      console.error('Mobile money payment error:', error);
+      alert('Failed to initiate payment. Please try again.');
+      checkoutContent?.querySelectorAll('.card, [class*="Card"]').forEach((card) => (card as HTMLElement).style.display = '');
+      processingState?.classList.add('hidden');
+      payMobileBtn.disabled = false;
+    }
+  });
+
+  async function pollPaymentStatus(reference: string) {
+    const maxAttempts = 60; // 5 minutes at 5-second intervals
+    let attempts = 0;
+
+    const poll = async () => {
+      attempts++;
+
+      try {
+        const response = await fetch(`/api/payments/check-status?reference=${reference}`);
+        const result = await response.json();
+
+        if (result.status === 'successful') {
+          window.location.href = `/order/success?order_id=${orderId}`;
+          return;
+        }
+
+        if (result.status === 'failed') {
+          alert('Payment failed. Please try again.');
+          window.location.reload();
+          return;
+        }
+
+        if (attempts < maxAttempts) {
+          setTimeout(poll, 5000);
+        } else {
+          alert('Payment timeout. Please check your phone or try again.');
+          window.location.reload();
+        }
+      } catch (error) {
+        console.error('Poll error:', error);
+        if (attempts < maxAttempts) {
+          setTimeout(poll, 5000);
+        }
+      }
+    };
+
+    poll();
+  }
+
+  // Load order on page load
+  loadOrder();
+</script>
+
+<style>
+  .payment-option.border-accent-gold .check-indicator {
+    border-color: var(--color-accent-gold);
+  }
+</style>

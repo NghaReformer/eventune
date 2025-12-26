@@ -1,0 +1,511 @@
+---
+/**
+ * Admin Customer Detail Page
+ * View customer profile and order history
+ *
+ * Security: Admin role with customers:view permission required
+ */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { getCustomerDetail } from '../../../services/admin.service';
+import { hasPermission } from '../../../lib/auth/admin-session';
+import type { AdminSessionData } from '../../../lib/auth/admin-session';
+import { isValidUUID } from '../../../lib/security/validation';
+
+// Get admin session from layout
+const adminSession = Astro.locals.adminSession as AdminSessionData;
+const { permissions } = adminSession;
+
+// Verify customers permission
+if (!hasPermission(permissions, 'customers:view')) {
+  return Astro.redirect('/admin?error=permission_denied');
+}
+
+// Get customer ID from URL and validate
+const { id } = Astro.params;
+
+if (!id || !isValidUUID(id)) {
+  return Astro.redirect('/admin/customers?error=invalid_id');
+}
+
+// Fetch customer detail
+const result = await getCustomerDetail(id);
+
+if (!result) {
+  return Astro.redirect('/admin/customers?error=not_found');
+}
+
+const { customer, orders, stats } = result;
+
+// Status color mapping
+const statusColors: Record<string, { bg: string; text: string; dot: string }> = {
+  pending: { bg: 'bg-amber-500/10', text: 'text-amber-400', dot: 'bg-amber-400' },
+  payment_pending: { bg: 'bg-amber-500/10', text: 'text-amber-400', dot: 'bg-amber-400' },
+  paid: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', dot: 'bg-emerald-400' },
+  in_progress: { bg: 'bg-blue-500/10', text: 'text-blue-400', dot: 'bg-blue-400' },
+  composing: { bg: 'bg-blue-500/10', text: 'text-blue-400', dot: 'bg-blue-400' },
+  recording: { bg: 'bg-purple-500/10', text: 'text-purple-400', dot: 'bg-purple-400' },
+  mixing: { bg: 'bg-indigo-500/10', text: 'text-indigo-400', dot: 'bg-indigo-400' },
+  review: { bg: 'bg-cyan-500/10', text: 'text-cyan-400', dot: 'bg-cyan-400' },
+  completed: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', dot: 'bg-emerald-400' },
+  delivered: { bg: 'bg-gold/10', text: 'text-gold', dot: 'bg-gold' },
+  cancelled: { bg: 'bg-red-500/10', text: 'text-red-400', dot: 'bg-red-400' },
+};
+
+function getStatusColor(status: string) {
+  return statusColors[status] || statusColors.pending;
+}
+
+function formatDate(date: string, withTime = false) {
+  const options: Intl.DateTimeFormatOptions = {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  };
+  if (withTime) {
+    options.hour = '2-digit';
+    options.minute = '2-digit';
+  }
+  return new Date(date).toLocaleDateString('en-US', options);
+}
+
+function formatCurrency(amount: number, currency: string) {
+  if (currency === 'XAF') {
+    return `${amount.toLocaleString()} XAF`;
+  }
+  return `$${amount.toLocaleString()}`;
+}
+---
+
+<AdminLayout title={`Customer: ${customer.full_name || customer.email}`} activeNav="customers">
+  <!-- Back Link -->
+  <a href="/admin/customers" class="back-link">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+    </svg>
+    Back to Customers
+  </a>
+
+  <!-- Customer Header -->
+  <div class="customer-header">
+    <div class="customer-avatar-lg">
+      <span>{(customer.full_name || customer.email).charAt(0).toUpperCase()}</span>
+    </div>
+    <div class="customer-header-info">
+      <h1 class="font-display text-2xl text-admin-cream">
+        {customer.full_name || 'No Name Set'}
+      </h1>
+      <p class="text-admin-cream/50">{customer.email}</p>
+      {customer.phone && (
+        <p class="text-admin-cream/40 text-sm mt-1">{customer.phone}</p>
+      )}
+    </div>
+    <div class="customer-header-meta">
+      <span class="meta-label">Customer since</span>
+      <span class="meta-value">{formatDate(customer.created_at)}</span>
+    </div>
+  </div>
+
+  <!-- Stats Grid -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-icon bg-gold/10">
+        <svg class="w-5 h-5 text-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+        </svg>
+      </div>
+      <div class="stat-content">
+        <span class="stat-value">{stats.total_orders}</span>
+        <span class="stat-label">Total Orders</span>
+      </div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-icon bg-emerald-500/10">
+        <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      </div>
+      <div class="stat-content">
+        <span class="stat-value text-emerald-400">${stats.total_spent_usd.toLocaleString()}</span>
+        <span class="stat-label">USD Spent</span>
+      </div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-icon bg-purple-500/10">
+        <svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
+        </svg>
+      </div>
+      <div class="stat-content">
+        <span class="stat-value text-purple-400">{stats.total_spent_xaf.toLocaleString()}</span>
+        <span class="stat-label">XAF Spent</span>
+      </div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-icon bg-cyan-500/10">
+        <svg class="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      </div>
+      <div class="stat-content">
+        <span class="stat-value text-cyan-400">{stats.completed_orders}</span>
+        <span class="stat-label">Completed</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Order History -->
+  <div class="orders-section">
+    <div class="section-header">
+      <h2 class="font-display text-xl text-admin-cream">Order History</h2>
+      <span class="order-count-badge">{orders.length} orders</span>
+    </div>
+
+    {orders.length === 0 ? (
+      <div class="empty-orders">
+        <svg class="w-12 h-12 text-gold/20 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+        </svg>
+        <p class="text-admin-cream/40">This customer has no orders yet</p>
+      </div>
+    ) : (
+      <div class="orders-list">
+        {orders.map((order) => {
+          const colors = getStatusColor(order.status);
+          return (
+            <a href={`/admin/orders/${order.id}`} class="order-card">
+              <div class="order-main">
+                <span class="order-number">{order.order_number}</span>
+                <div class="order-details">
+                  <span class="package-name">{(order.package_slug || '').replace(/-/g, ' ')}</span>
+                  <span class="occasion-name">{(order.occasion_slug || '').replace(/-/g, ' ')}</span>
+                </div>
+              </div>
+              <div class="order-status">
+                <span class={`status-badge ${colors.bg} ${colors.text}`}>
+                  <span class={`status-dot ${colors.dot}`}></span>
+                  {order.status.replace(/_/g, ' ')}
+                </span>
+              </div>
+              <div class="order-amount">
+                <span class="amount-value">{formatCurrency(order.amount_expected, order.currency)}</span>
+                <span class="payment-status">{order.payment_status}</span>
+              </div>
+              <div class="order-date">
+                {formatDate(order.created_at)}
+              </div>
+              <div class="order-arrow">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
+            </a>
+          );
+        })}
+      </div>
+    )}
+  </div>
+</AdminLayout>
+
+<style>
+  :root {
+    --admin-black: #0A0A0A;
+    --admin-card: #111111;
+    --admin-cream: #F5F5F5;
+    --gold: #D4AF37;
+  }
+
+  .font-display { font-family: 'Playfair Display', serif; }
+
+  /* Back Link */
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: rgba(245, 245, 245, 0.5);
+    font-size: 0.875rem;
+    margin-bottom: 1.5rem;
+    transition: color 0.2s ease;
+  }
+
+  .back-link:hover {
+    color: var(--gold);
+  }
+
+  /* Customer Header */
+  .customer-header {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    padding: 2rem;
+    background: var(--admin-card);
+    border: 1px solid rgba(212, 175, 55, 0.08);
+    border-radius: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .customer-avatar-lg {
+    width: 5rem;
+    height: 5rem;
+    border-radius: 9999px;
+    background: linear-gradient(135deg, rgba(212, 175, 55, 0.2) 0%, rgba(212, 175, 55, 0.1) 100%);
+    border: 2px solid rgba(212, 175, 55, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--gold);
+    font-weight: 600;
+    font-size: 2rem;
+    font-family: 'Playfair Display', serif;
+    flex-shrink: 0;
+  }
+
+  .customer-header-info {
+    flex: 1;
+  }
+
+  .customer-header-meta {
+    text-align: right;
+    padding-left: 2rem;
+    border-left: 1px solid rgba(212, 175, 55, 0.1);
+  }
+
+  .meta-label {
+    display: block;
+    font-size: 0.75rem;
+    color: rgba(245, 245, 245, 0.4);
+    margin-bottom: 0.25rem;
+  }
+
+  .meta-value {
+    font-family: 'Playfair Display', serif;
+    color: var(--admin-cream);
+    font-size: 1.125rem;
+  }
+
+  /* Stats Grid */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+
+  @media (min-width: 768px) {
+    .stats-grid {
+      grid-template-columns: repeat(4, 1fr);
+    }
+  }
+
+  .stat-card {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.25rem;
+    background: var(--admin-card);
+    border: 1px solid rgba(212, 175, 55, 0.08);
+    border-radius: 0.75rem;
+  }
+
+  .stat-icon {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .stat-content {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .stat-value {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--admin-cream);
+    line-height: 1;
+  }
+
+  .stat-label {
+    font-size: 0.75rem;
+    color: rgba(245, 245, 245, 0.4);
+    margin-top: 0.25rem;
+  }
+
+  /* Orders Section */
+  .orders-section {
+    background: var(--admin-card);
+    border: 1px solid rgba(212, 175, 55, 0.08);
+    border-radius: 1rem;
+    overflow: hidden;
+  }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.5rem;
+    border-bottom: 1px solid rgba(212, 175, 55, 0.08);
+  }
+
+  .order-count-badge {
+    padding: 0.375rem 0.75rem;
+    background: rgba(212, 175, 55, 0.1);
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    color: var(--gold);
+    font-weight: 500;
+  }
+
+  .empty-orders {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4rem;
+    text-align: center;
+  }
+
+  .orders-list {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .order-card {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr auto;
+    gap: 1rem;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid rgba(212, 175, 55, 0.05);
+    align-items: center;
+    transition: background 0.2s ease;
+  }
+
+  .order-card:hover {
+    background: rgba(212, 175, 55, 0.03);
+  }
+
+  .order-card:last-child {
+    border-bottom: none;
+  }
+
+  .order-main {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .order-number {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.875rem;
+    color: var(--gold);
+    font-weight: 500;
+  }
+
+  .order-details {
+    display: flex;
+    gap: 0.5rem;
+    font-size: 0.75rem;
+  }
+
+  .package-name {
+    color: rgba(245, 245, 245, 0.6);
+    text-transform: capitalize;
+  }
+
+  .occasion-name {
+    color: rgba(245, 245, 245, 0.4);
+    text-transform: capitalize;
+  }
+
+  .occasion-name::before {
+    content: '•';
+    margin-right: 0.5rem;
+  }
+
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.375rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.7rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .status-dot {
+    width: 0.375rem;
+    height: 0.375rem;
+    border-radius: 9999px;
+  }
+
+  .order-amount {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+
+  .amount-value {
+    font-weight: 600;
+    color: var(--admin-cream);
+    font-size: 0.875rem;
+  }
+
+  .payment-status {
+    font-size: 0.65rem;
+    color: rgba(245, 245, 245, 0.4);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .order-date {
+    font-size: 0.8rem;
+    color: rgba(245, 245, 245, 0.5);
+  }
+
+  .order-arrow {
+    color: rgba(245, 245, 245, 0.3);
+    transition: color 0.2s ease;
+  }
+
+  .order-card:hover .order-arrow {
+    color: var(--gold);
+  }
+
+  @media (max-width: 768px) {
+    .customer-header {
+      flex-direction: column;
+      text-align: center;
+    }
+
+    .customer-header-meta {
+      border-left: none;
+      border-top: 1px solid rgba(212, 175, 55, 0.1);
+      padding-left: 0;
+      padding-top: 1rem;
+      text-align: center;
+    }
+
+    .order-card {
+      grid-template-columns: 1fr;
+      gap: 0.75rem;
+    }
+
+    .order-arrow {
+      display: none;
+    }
+  }
+
+  /* Color utilities */
+  .text-gold { color: var(--gold); }
+  .text-admin-cream { color: var(--admin-cream); }
+  .bg-gold { background-color: var(--gold); }
+</style>

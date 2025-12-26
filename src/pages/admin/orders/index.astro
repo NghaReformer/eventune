@@ -1,0 +1,904 @@
+---
+/**
+ * Admin Orders List
+ * Filterable, sortable table with search and pagination
+ *
+ * Security: Admin role required
+ */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { getOrders } from '../../../services/admin.service';
+import { hasPermission } from '../../../lib/auth/admin-session';
+import type { AdminSessionData } from '../../../lib/auth/admin-session';
+
+// Get admin session from layout
+const adminSession = Astro.locals.adminSession as AdminSessionData;
+const { permissions } = adminSession;
+
+// Get query parameters for filters
+const url = Astro.url;
+const status = url.searchParams.get('status') || 'all';
+const search = url.searchParams.get('search') || '';
+const page = parseInt(url.searchParams.get('page') || '1');
+const sortBy = url.searchParams.get('sort') || 'created_at';
+const sortOrder = (url.searchParams.get('order') || 'desc') as 'asc' | 'desc';
+
+// Fetch orders
+const { orders, total, limit } = await getOrders({
+  status: status !== 'all' ? status : undefined,
+  search: search || undefined,
+  page,
+  limit: 20,
+  sort_by: sortBy,
+  sort_order: sortOrder,
+});
+
+const totalPages = Math.ceil(total / limit);
+const canExport = hasPermission(permissions, 'orders:export');
+
+// Status options for filter
+const statusOptions = [
+  { value: 'all', label: 'All Orders' },
+  { value: 'pending', label: 'Pending' },
+  { value: 'payment_pending', label: 'Payment Pending' },
+  { value: 'paid', label: 'Paid' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'composing', label: 'Composing' },
+  { value: 'recording', label: 'Recording' },
+  { value: 'mixing', label: 'Mixing' },
+  { value: 'review', label: 'In Review' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'delivered', label: 'Delivered' },
+  { value: 'cancelled', label: 'Cancelled' },
+];
+
+// Status color mapping
+const statusColors: Record<string, { bg: string; text: string; dot: string }> = {
+  pending: { bg: 'bg-amber-500/10', text: 'text-amber-400', dot: 'bg-amber-400' },
+  payment_pending: { bg: 'bg-amber-500/10', text: 'text-amber-400', dot: 'bg-amber-400' },
+  paid: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', dot: 'bg-emerald-400' },
+  in_progress: { bg: 'bg-blue-500/10', text: 'text-blue-400', dot: 'bg-blue-400' },
+  composing: { bg: 'bg-blue-500/10', text: 'text-blue-400', dot: 'bg-blue-400' },
+  recording: { bg: 'bg-purple-500/10', text: 'text-purple-400', dot: 'bg-purple-400' },
+  mixing: { bg: 'bg-indigo-500/10', text: 'text-indigo-400', dot: 'bg-indigo-400' },
+  review: { bg: 'bg-cyan-500/10', text: 'text-cyan-400', dot: 'bg-cyan-400' },
+  completed: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', dot: 'bg-emerald-400' },
+  delivered: { bg: 'bg-gold/10', text: 'text-gold', dot: 'bg-gold' },
+  cancelled: { bg: 'bg-red-500/10', text: 'text-red-400', dot: 'bg-red-400' },
+};
+
+function getStatusColor(s: string) {
+  return statusColors[s] || statusColors.pending;
+}
+
+function formatCurrency(amount: number, currency: string) {
+  if (currency === 'XAF') {
+    return `${amount.toLocaleString()} XAF`;
+  }
+  return `$${amount.toLocaleString()}`;
+}
+
+function formatDate(date: string) {
+  return new Date(date).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function buildUrl(params: Record<string, string | number>) {
+  const newUrl = new URL(url);
+  Object.entries(params).forEach(([key, value]) => {
+    if (value) {
+      newUrl.searchParams.set(key, String(value));
+    } else {
+      newUrl.searchParams.delete(key);
+    }
+  });
+  return newUrl.pathname + newUrl.search;
+}
+---
+
+<AdminLayout title="Orders" activeNav="orders">
+  <!-- Filters Bar -->
+  <div class="filters-bar">
+    <!-- Search -->
+    <div class="search-container">
+      <svg class="search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+      </svg>
+      <input
+        type="text"
+        id="search-input"
+        placeholder="Search by order # or email..."
+        value={search}
+        class="search-input"
+      />
+      {search && (
+        <a href={buildUrl({ search: '', page: 1 })} class="clear-search">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </a>
+      )}
+    </div>
+
+    <!-- Status Filter Pills -->
+    <div class="filter-pills">
+      {statusOptions.slice(0, 6).map((opt) => (
+        <a
+          href={buildUrl({ status: opt.value, page: 1 })}
+          class:list={['filter-pill', status === opt.value && 'active']}
+        >
+          {opt.label}
+          {status === opt.value && (
+            <span class="pill-count">{total}</span>
+          )}
+        </a>
+      ))}
+      <!-- Dropdown for more statuses -->
+      <div class="filter-dropdown">
+        <button class="filter-pill" id="more-filters-btn">
+          More
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        <div class="dropdown-menu" id="more-filters-menu">
+          {statusOptions.slice(6).map((opt) => (
+            <a href={buildUrl({ status: opt.value, page: 1 })} class="dropdown-item">
+              {opt.label}
+            </a>
+          ))}
+        </div>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="filter-actions">
+      {canExport && (
+        <button id="export-btn" class="export-btn">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+          </svg>
+          Export CSV
+        </button>
+      )}
+    </div>
+  </div>
+
+  <!-- Results Summary -->
+  <div class="results-summary">
+    <span class="result-count">
+      Showing <strong>{orders.length}</strong> of <strong>{total}</strong> orders
+    </span>
+    {search && (
+      <span class="search-query">
+        for "<strong>{search}</strong>"
+      </span>
+    )}
+  </div>
+
+  <!-- Orders Table -->
+  <div class="table-container">
+    {orders.length === 0 ? (
+      <div class="empty-state">
+        <div class="empty-icon">
+          <svg class="w-16 h-16 text-gold/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+          </svg>
+        </div>
+        <h3 class="font-display text-xl text-admin-cream mb-2">No orders found</h3>
+        <p class="text-admin-cream/50 mb-4">
+          {search ? `No orders match "${search}"` : 'No orders in this category yet'}
+        </p>
+        {search && (
+          <a href="/admin/orders" class="action-btn secondary">
+            Clear filters
+          </a>
+        )}
+      </div>
+    ) : (
+      <table class="orders-table">
+        <thead>
+          <tr>
+            <th>
+              <a href={buildUrl({ sort: 'order_number', order: sortBy === 'order_number' && sortOrder === 'asc' ? 'desc' : 'asc' })} class="sort-header">
+                Order #
+                {sortBy === 'order_number' && (
+                  <svg class={`sort-icon ${sortOrder === 'desc' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+                  </svg>
+                )}
+              </a>
+            </th>
+            <th>Customer</th>
+            <th>Package</th>
+            <th>Status</th>
+            <th>Payment</th>
+            <th>
+              <a href={buildUrl({ sort: 'amount_expected', order: sortBy === 'amount_expected' && sortOrder === 'asc' ? 'desc' : 'asc' })} class="sort-header">
+                Amount
+                {sortBy === 'amount_expected' && (
+                  <svg class={`sort-icon ${sortOrder === 'desc' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+                  </svg>
+                )}
+              </a>
+            </th>
+            <th>
+              <a href={buildUrl({ sort: 'created_at', order: sortBy === 'created_at' && sortOrder === 'asc' ? 'desc' : 'asc' })} class="sort-header">
+                Date
+                {sortBy === 'created_at' && (
+                  <svg class={`sort-icon ${sortOrder === 'desc' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+                  </svg>
+                )}
+              </a>
+            </th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {orders.map((order) => {
+            const colors = getStatusColor(order.status);
+            const paymentColors = order.payment_status === 'paid'
+              ? { bg: 'bg-emerald-500/10', text: 'text-emerald-400' }
+              : { bg: 'bg-amber-500/10', text: 'text-amber-400' };
+            return (
+              <tr class="order-row" data-id={order.id}>
+                <td>
+                  <span class="order-number">{order.order_number}</span>
+                </td>
+                <td>
+                  <div class="customer-cell">
+                    <span class="customer-name">{order.customer_name || 'Unknown'}</span>
+                    <span class="customer-email">{order.customer_email}</span>
+                  </div>
+                </td>
+                <td>
+                  <span class="package-badge">{order.package_slug?.replace(/-/g, ' ') || 'N/A'}</span>
+                </td>
+                <td>
+                  <span class={`status-badge ${colors.bg} ${colors.text}`}>
+                    <span class={`status-dot ${colors.dot}`}></span>
+                    {order.status.replace(/_/g, ' ')}
+                  </span>
+                </td>
+                <td>
+                  <span class={`payment-badge ${paymentColors.bg} ${paymentColors.text}`}>
+                    {order.payment_status}
+                  </span>
+                </td>
+                <td>
+                  <span class="amount">{formatCurrency(order.amount_expected, order.currency)}</span>
+                </td>
+                <td>
+                  <span class="date">{formatDate(order.created_at)}</span>
+                </td>
+                <td>
+                  <a href={`/admin/orders/${order.id}`} class="view-btn">
+                    View
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </a>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    )}
+  </div>
+
+  <!-- Pagination -->
+  {totalPages > 1 && (
+    <div class="pagination">
+      <div class="pagination-info">
+        Page <strong>{page}</strong> of <strong>{totalPages}</strong>
+      </div>
+      <div class="pagination-controls">
+        {page > 1 && (
+          <a href={buildUrl({ page: page - 1 })} class="page-btn">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+            </svg>
+            Previous
+          </a>
+        )}
+        <div class="page-numbers">
+          {[...Array(Math.min(5, totalPages))].map((_, i) => {
+            let pageNum: number;
+            if (totalPages <= 5) {
+              pageNum = i + 1;
+            } else if (page <= 3) {
+              pageNum = i + 1;
+            } else if (page >= totalPages - 2) {
+              pageNum = totalPages - 4 + i;
+            } else {
+              pageNum = page - 2 + i;
+            }
+            return (
+              <a
+                href={buildUrl({ page: pageNum })}
+                class:list={['page-number', page === pageNum && 'active']}
+              >
+                {pageNum}
+              </a>
+            );
+          })}
+        </div>
+        {page < totalPages && (
+          <a href={buildUrl({ page: page + 1 })} class="page-btn">
+            Next
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            </svg>
+          </a>
+        )}
+      </div>
+    </div>
+  )}
+</AdminLayout>
+
+<style>
+  :root {
+    --admin-black: #0A0A0A;
+    --admin-card: #111111;
+    --admin-cream: #F5F5F5;
+    --gold: #D4AF37;
+  }
+
+  .font-display { font-family: 'Playfair Display', serif; }
+
+  /* Filters Bar */
+  .filters-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: var(--admin-card);
+    border: 1px solid rgba(212, 175, 55, 0.08);
+    border-radius: 1rem;
+  }
+
+  /* Search */
+  .search-container {
+    position: relative;
+    flex: 1;
+    min-width: 200px;
+    max-width: 300px;
+  }
+
+  .search-icon {
+    position: absolute;
+    left: 0.875rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 1.25rem;
+    height: 1.25rem;
+    color: rgba(245, 245, 245, 0.3);
+    pointer-events: none;
+  }
+
+  .search-input {
+    width: 100%;
+    padding: 0.625rem 2.5rem 0.625rem 2.75rem;
+    background: var(--admin-black);
+    border: 1px solid rgba(212, 175, 55, 0.15);
+    border-radius: 0.5rem;
+    color: var(--admin-cream);
+    font-size: 0.875rem;
+    transition: all 0.2s ease;
+  }
+
+  .search-input::placeholder {
+    color: rgba(245, 245, 245, 0.3);
+  }
+
+  .search-input:focus {
+    outline: none;
+    border-color: var(--gold);
+    box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.1);
+  }
+
+  .clear-search {
+    position: absolute;
+    right: 0.625rem;
+    top: 50%;
+    transform: translateY(-50%);
+    padding: 0.25rem;
+    color: rgba(245, 245, 245, 0.4);
+    transition: color 0.2s ease;
+  }
+
+  .clear-search:hover {
+    color: var(--gold);
+  }
+
+  /* Filter Pills */
+  .filter-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    flex: 2;
+  }
+
+  .filter-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.5rem 0.875rem;
+    background: transparent;
+    border: 1px solid rgba(212, 175, 55, 0.15);
+    border-radius: 9999px;
+    color: rgba(245, 245, 245, 0.6);
+    font-size: 0.8rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    cursor: pointer;
+  }
+
+  .filter-pill:hover {
+    border-color: rgba(212, 175, 55, 0.3);
+    color: var(--admin-cream);
+  }
+
+  .filter-pill.active {
+    background: rgba(212, 175, 55, 0.15);
+    border-color: var(--gold);
+    color: var(--gold);
+  }
+
+  .pill-count {
+    padding: 0.125rem 0.375rem;
+    background: var(--gold);
+    color: var(--admin-black);
+    border-radius: 9999px;
+    font-size: 0.65rem;
+    font-weight: 600;
+  }
+
+  /* Filter Dropdown */
+  .filter-dropdown {
+    position: relative;
+  }
+
+  .dropdown-menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    margin-top: 0.5rem;
+    min-width: 150px;
+    background: var(--admin-card);
+    border: 1px solid rgba(212, 175, 55, 0.15);
+    border-radius: 0.5rem;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-0.5rem);
+    transition: all 0.2s ease;
+    z-index: 50;
+  }
+
+  .dropdown-menu.open {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+  }
+
+  .dropdown-item {
+    display: block;
+    padding: 0.625rem 1rem;
+    color: rgba(245, 245, 245, 0.7);
+    font-size: 0.8rem;
+    transition: all 0.2s ease;
+  }
+
+  .dropdown-item:hover {
+    background: rgba(212, 175, 55, 0.1);
+    color: var(--gold);
+  }
+
+  .dropdown-item:first-child {
+    border-radius: 0.5rem 0.5rem 0 0;
+  }
+
+  .dropdown-item:last-child {
+    border-radius: 0 0 0.5rem 0.5rem;
+  }
+
+  /* Filter Actions */
+  .filter-actions {
+    margin-left: auto;
+  }
+
+  .export-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.5rem 1rem;
+    background: rgba(212, 175, 55, 0.1);
+    border: 1px solid rgba(212, 175, 55, 0.2);
+    border-radius: 0.5rem;
+    color: var(--gold);
+    font-size: 0.8rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    cursor: pointer;
+  }
+
+  .export-btn:hover {
+    background: rgba(212, 175, 55, 0.15);
+    border-color: var(--gold);
+  }
+
+  /* Results Summary */
+  .results-summary {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    font-size: 0.875rem;
+    color: rgba(245, 245, 245, 0.5);
+  }
+
+  .results-summary strong {
+    color: var(--admin-cream);
+  }
+
+  /* Table Container */
+  .table-container {
+    background: var(--admin-card);
+    border: 1px solid rgba(212, 175, 55, 0.08);
+    border-radius: 1rem;
+    overflow: hidden;
+  }
+
+  /* Orders Table */
+  .orders-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .orders-table th {
+    padding: 1rem;
+    text-align: left;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: rgba(245, 245, 245, 0.4);
+    background: rgba(0, 0, 0, 0.3);
+    border-bottom: 1px solid rgba(212, 175, 55, 0.08);
+  }
+
+  .sort-header {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    color: inherit;
+    transition: color 0.2s ease;
+  }
+
+  .sort-header:hover {
+    color: var(--gold);
+  }
+
+  .sort-icon {
+    width: 0.875rem;
+    height: 0.875rem;
+    transition: transform 0.2s ease;
+  }
+
+  .sort-icon.rotate-180 {
+    transform: rotate(180deg);
+  }
+
+  .order-row {
+    border-bottom: 1px solid rgba(212, 175, 55, 0.05);
+    transition: background 0.2s ease;
+    cursor: pointer;
+  }
+
+  .order-row:hover {
+    background: rgba(212, 175, 55, 0.03);
+  }
+
+  .order-row td {
+    padding: 1rem;
+    vertical-align: middle;
+  }
+
+  .order-number {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.875rem;
+    color: var(--gold);
+    font-weight: 500;
+  }
+
+  .customer-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+
+  .customer-name {
+    font-weight: 500;
+    color: var(--admin-cream);
+    font-size: 0.875rem;
+  }
+
+  .customer-email {
+    font-size: 0.75rem;
+    color: rgba(245, 245, 245, 0.4);
+  }
+
+  .package-badge {
+    display: inline-block;
+    padding: 0.25rem 0.625rem;
+    background: rgba(212, 175, 55, 0.1);
+    border-radius: 0.375rem;
+    font-size: 0.75rem;
+    color: var(--gold);
+    text-transform: capitalize;
+  }
+
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.3rem 0.625rem;
+    border-radius: 9999px;
+    font-size: 0.7rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .status-dot {
+    width: 0.375rem;
+    height: 0.375rem;
+    border-radius: 9999px;
+  }
+
+  .payment-badge {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.7rem;
+    font-weight: 500;
+    text-transform: capitalize;
+  }
+
+  .amount {
+    font-weight: 600;
+    color: var(--admin-cream);
+    font-size: 0.875rem;
+  }
+
+  .date {
+    font-size: 0.8rem;
+    color: rgba(245, 245, 245, 0.5);
+  }
+
+  .view-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.375rem 0.75rem;
+    border-radius: 0.375rem;
+    color: rgba(245, 245, 245, 0.5);
+    font-size: 0.8rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+  }
+
+  .view-btn:hover {
+    background: rgba(212, 175, 55, 0.1);
+    color: var(--gold);
+  }
+
+  /* Pagination */
+  .pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 1.5rem;
+    padding: 1rem;
+    background: var(--admin-card);
+    border: 1px solid rgba(212, 175, 55, 0.08);
+    border-radius: 1rem;
+  }
+
+  .pagination-info {
+    font-size: 0.875rem;
+    color: rgba(245, 245, 245, 0.5);
+  }
+
+  .pagination-info strong {
+    color: var(--admin-cream);
+  }
+
+  .pagination-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .page-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.5rem 0.875rem;
+    background: rgba(212, 175, 55, 0.1);
+    border: 1px solid rgba(212, 175, 55, 0.2);
+    border-radius: 0.5rem;
+    color: var(--gold);
+    font-size: 0.8rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+  }
+
+  .page-btn:hover {
+    background: rgba(212, 175, 55, 0.15);
+    border-color: var(--gold);
+  }
+
+  .page-numbers {
+    display: flex;
+    gap: 0.25rem;
+  }
+
+  .page-number {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 0.375rem;
+    color: rgba(245, 245, 245, 0.5);
+    font-size: 0.8rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+  }
+
+  .page-number:hover {
+    background: rgba(212, 175, 55, 0.1);
+    color: var(--gold);
+  }
+
+  .page-number.active {
+    background: var(--gold);
+    color: var(--admin-black);
+  }
+
+  /* Empty State */
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4rem 2rem;
+    text-align: center;
+  }
+
+  .empty-icon {
+    margin-bottom: 1rem;
+  }
+
+  .action-btn.secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1.25rem;
+    background: rgba(212, 175, 55, 0.1);
+    border: 1px solid rgba(212, 175, 55, 0.2);
+    border-radius: 0.5rem;
+    color: var(--gold);
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+  }
+
+  .action-btn.secondary:hover {
+    background: rgba(212, 175, 55, 0.15);
+  }
+
+  /* Color utilities */
+  .text-gold { color: var(--gold); }
+  .text-admin-cream { color: var(--admin-cream); }
+  .bg-gold { background-color: var(--gold); }
+</style>
+
+<script>
+  // Search with debounce
+  const searchInput = document.getElementById('search-input') as HTMLInputElement;
+  let searchTimeout: ReturnType<typeof setTimeout>;
+
+  searchInput?.addEventListener('input', () => {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+      const url = new URL(window.location.href);
+      if (searchInput.value) {
+        url.searchParams.set('search', searchInput.value);
+      } else {
+        url.searchParams.delete('search');
+      }
+      url.searchParams.set('page', '1');
+      window.location.href = url.toString();
+    }, 500);
+  });
+
+  // More filters dropdown
+  const moreBtn = document.getElementById('more-filters-btn');
+  const moreMenu = document.getElementById('more-filters-menu');
+
+  moreBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    moreMenu?.classList.toggle('open');
+  });
+
+  document.addEventListener('click', () => {
+    moreMenu?.classList.remove('open');
+  });
+
+  // Row click to navigate
+  document.querySelectorAll('.order-row').forEach(row => {
+    row.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('a')) {
+        const id = (row as HTMLElement).dataset.id;
+        if (id) window.location.href = `/admin/orders/${id}`;
+      }
+    });
+  });
+
+  // Export CSV
+  const exportBtn = document.getElementById('export-btn');
+  exportBtn?.addEventListener('click', async () => {
+    const btn = exportBtn as HTMLButtonElement;
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Exporting...';
+
+    try {
+      // Build export URL with current filters
+      const url = new URL('/api/admin/orders/export', window.location.origin);
+      const currentUrl = new URL(window.location.href);
+
+      const status = currentUrl.searchParams.get('status');
+      const dateFrom = currentUrl.searchParams.get('date_from');
+      const dateTo = currentUrl.searchParams.get('date_to');
+
+      if (status) url.searchParams.set('status', status);
+      if (dateFrom) url.searchParams.set('date_from', dateFrom);
+      if (dateTo) url.searchParams.set('date_to', dateTo);
+
+      const response = await fetch(url.toString());
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Export failed');
+      }
+
+      // Download the CSV
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = response.headers.get('Content-Disposition')?.split('filename="')[1]?.slice(0, -1) || 'orders-export.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Export failed');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }
+  });
+</script>

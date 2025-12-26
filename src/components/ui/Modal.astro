@@ -1,0 +1,135 @@
+---
+/**
+ * Modal Component
+ * Dialog overlay with backdrop
+ */
+
+interface Props {
+  id: string;
+  title?: string;
+  size?: 'sm' | 'md' | 'lg' | 'xl' | 'full';
+  closeOnBackdrop?: boolean;
+  closeOnEscape?: boolean;
+  showClose?: boolean;
+  class?: string;
+}
+
+const {
+  id,
+  title,
+  size = 'md',
+  closeOnBackdrop = true,
+  closeOnEscape = true,
+  showClose = true,
+  class: className = '',
+} = Astro.props;
+
+const sizes = {
+  sm: 'max-w-sm',
+  md: 'max-w-md',
+  lg: 'max-w-lg',
+  xl: 'max-w-xl',
+  full: 'max-w-4xl',
+};
+---
+
+<dialog
+  id={id}
+  class="fixed inset-0 z-50 bg-transparent p-4 m-0 w-full h-full max-w-none max-h-none overflow-y-auto backdrop:bg-black/70"
+  data-close-on-backdrop={closeOnBackdrop}
+  data-close-on-escape={closeOnEscape}
+>
+  <div class="min-h-full flex items-center justify-center">
+    <div class={`w-full ${sizes[size]} bg-primary-cardBlack rounded-xl shadow-xl ${className}`}>
+      {(title || showClose) && (
+        <div class="flex items-center justify-between p-4 border-b border-text-muted">
+          {title && (
+            <h2 class="text-xl font-semibold text-text-primary font-heading">
+              {title}
+            </h2>
+          )}
+          {showClose && (
+            <button
+              type="button"
+              class="p-1 rounded-lg text-text-muted hover:text-text-primary hover:bg-primary-hoverBlack transition-colors"
+              data-modal-close
+              aria-label="Close modal"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
+      )}
+
+      <div class="p-6">
+        <slot />
+      </div>
+
+      <slot name="footer" />
+    </div>
+  </div>
+</dialog>
+
+<script define:vars={{ id }}>
+  const dialog = document.getElementById(id);
+
+  if (dialog) {
+    const closeOnBackdrop = dialog.dataset.closeOnBackdrop === 'true';
+    const closeOnEscape = dialog.dataset.closeOnEscape === 'true';
+
+    // Close on backdrop click
+    if (closeOnBackdrop) {
+      dialog.addEventListener('click', (e) => {
+        if (e.target === dialog) {
+          dialog.close();
+        }
+      });
+    }
+
+    // Close on escape
+    if (closeOnEscape) {
+      dialog.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          dialog.close();
+        }
+      });
+    }
+
+    // Close buttons
+    dialog.querySelectorAll('[data-modal-close]').forEach((btn) => {
+      btn.addEventListener('click', () => dialog.close());
+    });
+  }
+</script>
+
+<style>
+  dialog::backdrop {
+    background: rgba(0, 0, 0, 0.7);
+  }
+
+  dialog[open] {
+    animation: fadeIn 0.2s ease-out;
+  }
+
+  dialog[open] > div > div {
+    animation: slideUp 0.2s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+</style>

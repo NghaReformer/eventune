@@ -1,0 +1,56 @@
+---
+/**
+ * Card Component
+ * Content container with optional hover effects and variants
+ */
+
+interface Props {
+  variant?: 'default' | 'elevated' | 'bordered' | 'interactive';
+  padding?: 'none' | 'sm' | 'md' | 'lg';
+  href?: string;
+  class?: string;
+}
+
+const {
+  variant = 'default',
+  padding = 'md',
+  href,
+  class: className = '',
+} = Astro.props;
+
+const baseStyles = 'rounded-xl bg-primary-cardBlack';
+
+const variants = {
+  default: '',
+  elevated: 'shadow-card',
+  bordered: 'border border-text-muted',
+  interactive: 'hover:bg-primary-hoverBlack hover:shadow-card-hover transition-all duration-300 cursor-pointer',
+};
+
+const paddings = {
+  none: '',
+  sm: 'p-4',
+  md: 'p-6',
+  lg: 'p-8',
+};
+
+const classes = [
+  baseStyles,
+  variants[variant],
+  paddings[padding],
+  href ? 'block' : '',
+  className,
+].filter(Boolean).join(' ');
+
+const Tag = href ? 'a' : 'div';
+---
+
+{href ? (
+  <a href={href} class={classes}>
+    <slot />
+  </a>
+) : (
+  <div class={classes}>
+    <slot />
+  </div>
+)}

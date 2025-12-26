@@ -1,0 +1,187 @@
+---
+/**
+ * Auth Callback Page
+ * Handles OAuth redirects and email verification
+ */
+
+import AuthLayout from '@/layouts/AuthLayout.astro';
+import Card from '@/components/ui/Card.astro';
+---
+
+<AuthLayout title="Verifying... | Eventune Studios">
+  <Card variant="elevated" class="p-8">
+    <!-- Loading State -->
+    <div id="loading-state" class="text-center py-8">
+      <div class="w-12 h-12 mx-auto mb-4 border-4 border-accent-gold/30 border-t-accent-gold rounded-full animate-spin"></div>
+      <h1 class="text-xl font-heading font-bold text-text-primary mb-2">
+        Verifying Your Account
+      </h1>
+      <p class="text-text-secondary">Please wait while we confirm your details...</p>
+    </div>
+
+    <!-- Success State -->
+    <div id="success-state" class="hidden text-center py-8">
+      <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-status-success/20 flex items-center justify-center">
+        <svg class="w-8 h-8 text-status-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+        </svg>
+      </div>
+      <h2 class="text-xl font-heading font-bold text-text-primary mb-2">
+        Email Verified!
+      </h2>
+      <p class="text-text-secondary mb-6">
+        Your account has been verified. Redirecting you now...
+      </p>
+    </div>
+
+    <!-- Error State -->
+    <div id="error-state" class="hidden text-center py-8">
+      <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-status-error/20 flex items-center justify-center">
+        <svg class="w-8 h-8 text-status-error" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </div>
+      <h2 class="text-xl font-heading font-bold text-text-primary mb-2">
+        Verification Failed
+      </h2>
+      <p id="error-message" class="text-text-secondary mb-6">
+        Something went wrong. Please try again.
+      </p>
+      <div class="flex flex-col sm:flex-row gap-4 justify-center">
+        <a
+          href="/auth/login"
+          class="inline-flex items-center justify-center px-6 py-3 border border-text-muted text-text-primary rounded-lg hover:border-accent-gold hover:text-accent-gold transition-colors"
+        >
+          Go to Login
+        </a>
+        <a
+          href="/auth/signup"
+          class="inline-flex items-center justify-center px-6 py-3 bg-accent-gold text-primary-black rounded-lg hover:bg-accent-goldHover transition-colors"
+        >
+          Sign Up Again
+        </a>
+      </div>
+    </div>
+  </Card>
+</AuthLayout>
+
+<script>
+  import { supabase } from '@/lib/supabase/client';
+
+  const loadingState = document.getElementById('loading-state');
+  const successState = document.getElementById('success-state');
+  const errorState = document.getElementById('error-state');
+  const errorMessage = document.getElementById('error-message');
+
+  function showSuccess() {
+    loadingState?.classList.add('hidden');
+    successState?.classList.remove('hidden');
+  }
+
+  function showError(message: string) {
+    loadingState?.classList.add('hidden');
+    errorState?.classList.remove('hidden');
+    if (errorMessage) errorMessage.textContent = message;
+  }
+
+  async function handleCallback() {
+    try {
+      // Get the URL hash parameters (for email confirmation)
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const accessToken = hashParams.get('access_token');
+      const refreshToken = hashParams.get('refresh_token');
+      const type = hashParams.get('type');
+
+      // Get URL search parameters (for OAuth and error handling)
+      const searchParams = new URLSearchParams(window.location.search);
+      const error = searchParams.get('error');
+      const errorDescription = searchParams.get('error_description');
+
+      // Handle errors from Supabase
+      if (error) {
+        showError(errorDescription || 'Authentication failed. Please try again.');
+        return;
+      }
+
+      // Handle email confirmation or password recovery
+      if (accessToken && refreshToken) {
+        const { error: sessionError } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+
+        if (sessionError) {
+          showError('Failed to verify your account. The link may have expired.');
+          return;
+        }
+
+        // Sync session to HTTP-only cookies for server-side auth
+        try {
+          await fetch('/api/auth/session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            }),
+          });
+        } catch (syncError) {
+          console.error('Failed to sync session to cookies:', syncError);
+        }
+
+        // Check what type of callback this is
+        if (type === 'recovery') {
+          // Password recovery - redirect to reset password page
+          window.location.href = '/auth/reset-password';
+          return;
+        }
+
+        // Email confirmation - show success and redirect
+        showSuccess();
+        setTimeout(() => {
+          window.location.href = '/portal';
+        }, 2000);
+        return;
+      }
+
+      // Check for existing session (OAuth flow)
+      const { data: { session }, error: getSessionError } = await supabase.auth.getSession();
+
+      if (getSessionError) {
+        showError('Authentication failed. Please try again.');
+        return;
+      }
+
+      if (session) {
+        // Sync session to HTTP-only cookies for server-side auth
+        try {
+          await fetch('/api/auth/session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              access_token: session.access_token,
+              refresh_token: session.refresh_token,
+            }),
+          });
+        } catch (syncError) {
+          console.error('Failed to sync session to cookies:', syncError);
+        }
+
+        showSuccess();
+        setTimeout(() => {
+          window.location.href = '/portal';
+        }, 2000);
+        return;
+      }
+
+      // No session and no tokens - something went wrong
+      showError('No authentication data found. Please try signing in again.');
+
+    } catch (err) {
+      console.error('Callback error:', err);
+      showError('An unexpected error occurred. Please try again.');
+    }
+  }
+
+  handleCallback();
+</script>

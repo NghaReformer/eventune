@@ -1,0 +1,323 @@
+---
+/**
+ * Contact Page
+ * Contact form and information
+ */
+
+import PublicLayout from '@/layouts/PublicLayout.astro';
+import Card from '@/components/ui/Card.astro';
+import Input from '@/components/ui/Input.astro';
+import Textarea from '@/components/ui/Textarea.astro';
+import Button from '@/components/ui/Button.astro';
+import { siteConfig } from '@/config';
+
+// Contact methods
+const contactMethods = [
+  {
+    icon: '📧',
+    title: 'Email Us',
+    description: 'Send us a message anytime',
+    value: siteConfig.contact.email,
+    href: `mailto:${siteConfig.contact.email}`,
+  },
+  {
+    icon: '💬',
+    title: 'WhatsApp',
+    description: 'Chat with us directly',
+    value: siteConfig.contact.whatsapp || '+1 (555) 123-4567',
+    href: `https://wa.me/${(siteConfig.contact.whatsapp || '+15551234567').replace(/\D/g, '')}`,
+  },
+  {
+    icon: '📱',
+    title: 'Social Media',
+    description: 'Follow us for updates',
+    value: '@eventunestudios',
+    href: siteConfig.social.instagram || '#',
+  },
+];
+
+// FAQ items for contact page
+const contactFaqs = [
+  {
+    question: 'How quickly will you respond?',
+    answer: 'We typically respond to all inquiries within 24 hours, often much sooner. For urgent matters, WhatsApp is the fastest way to reach us.',
+  },
+  {
+    question: 'What information should I include?',
+    answer: 'Please include your name, the type of occasion, your timeline, and any specific questions you have. The more details, the better we can help!',
+  },
+  {
+    question: 'Can I request a custom package?',
+    answer: 'Absolutely! If our standard packages don\'t quite fit your needs, reach out and we\'ll work together to create a custom solution.',
+  },
+];
+---
+
+<PublicLayout
+  title="Contact Us | Eventune Studios"
+  description="Get in touch with Eventune Studios. We're here to answer your questions and help you create the perfect custom song for your celebration."
+>
+  <!-- Hero Section -->
+  <section class="py-16 md:py-24 bg-primary-cardBlack">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+      <h1 class="text-4xl md:text-5xl font-heading font-bold text-text-primary mb-4">
+        Get in Touch
+      </h1>
+      <p class="text-lg text-text-secondary max-w-2xl mx-auto">
+        Have questions about our services? Want to discuss a custom project?
+        We'd love to hear from you.
+      </p>
+    </div>
+  </section>
+
+  <!-- Contact Methods -->
+  <section class="py-12 border-b border-text-muted/20">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {contactMethods.map((method) => (
+          <a href={method.href} target="_blank" rel="noopener noreferrer" class="group">
+            <Card variant="elevated" hover class="text-center h-full">
+              <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-accent-gold/10 flex items-center justify-center group-hover:bg-accent-gold/20 transition-colors">
+                <span class="text-2xl">{method.icon}</span>
+              </div>
+              <h3 class="text-lg font-heading font-semibold text-text-primary mb-1">
+                {method.title}
+              </h3>
+              <p class="text-text-secondary text-sm mb-2">{method.description}</p>
+              <p class="text-accent-gold font-medium group-hover:text-accent-goldHover transition-colors">
+                {method.value}
+              </p>
+            </Card>
+          </a>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- Contact Form & Info -->
+  <section class="py-16 md:py-24">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-12">
+        <!-- Contact Form -->
+        <div>
+          <h2 class="text-2xl md:text-3xl font-heading font-bold text-text-primary mb-6">
+            Send Us a Message
+          </h2>
+
+          <form id="contact-form" class="space-y-6">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Input
+                label="First Name"
+                name="firstName"
+                placeholder="John"
+                required
+              />
+              <Input
+                label="Last Name"
+                name="lastName"
+                placeholder="Doe"
+                required
+              />
+            </div>
+
+            <Input
+              label="Email Address"
+              name="email"
+              type="email"
+              placeholder="john@example.com"
+              required
+            />
+
+            <Input
+              label="Phone Number (Optional)"
+              name="phone"
+              type="tel"
+              placeholder="+1 (555) 123-4567"
+            />
+
+            <div>
+              <label class="block text-sm font-medium text-text-primary mb-2">
+                Occasion Type
+              </label>
+              <select
+                name="occasion"
+                class="w-full px-4 py-3 bg-primary-cardBlack border border-text-muted/30 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-gold/50 focus:border-accent-gold"
+              >
+                <option value="">Select an occasion</option>
+                <option value="wedding">Wedding</option>
+                <option value="birthday">Birthday</option>
+                <option value="anniversary">Anniversary</option>
+                <option value="graduation">Graduation</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+
+            <Textarea
+              label="Your Message"
+              name="message"
+              placeholder="Tell us about your celebration and how we can help..."
+              rows={5}
+              required
+            />
+
+            <div class="flex items-start gap-3">
+              <input
+                type="checkbox"
+                id="consent"
+                name="consent"
+                required
+                class="mt-1 w-4 h-4 rounded border-text-muted/30 bg-primary-cardBlack text-accent-gold focus:ring-accent-gold/50"
+              />
+              <label for="consent" class="text-sm text-text-secondary">
+                I agree to receive communications from Eventune Studios. We respect your privacy and will never share your information.
+              </label>
+            </div>
+
+            <Button type="submit" variant="primary" size="lg" fullWidth>
+              Send Message
+            </Button>
+
+            <!-- Form Messages -->
+            <div id="form-success" class="hidden p-4 bg-status-success/20 border border-status-success rounded-lg text-status-success">
+              Thank you for your message! We'll get back to you within 24 hours.
+            </div>
+            <div id="form-error" class="hidden p-4 bg-status-error/20 border border-status-error rounded-lg text-status-error">
+              Something went wrong. Please try again or contact us directly.
+            </div>
+          </form>
+        </div>
+
+        <!-- FAQ & Additional Info -->
+        <div>
+          <h2 class="text-2xl md:text-3xl font-heading font-bold text-text-primary mb-6">
+            Common Questions
+          </h2>
+
+          <div class="space-y-6 mb-12">
+            {contactFaqs.map((faq) => (
+              <Card variant="default">
+                <h3 class="text-lg font-heading font-semibold text-text-primary mb-2">
+                  {faq.question}
+                </h3>
+                <p class="text-text-secondary">{faq.answer}</p>
+              </Card>
+            ))}
+          </div>
+
+          <!-- Response Time -->
+          <Card variant="bordered" class="border-accent-gold/30">
+            <div class="flex items-start gap-4">
+              <div class="w-12 h-12 rounded-full bg-accent-gold/10 flex items-center justify-center flex-shrink-0">
+                <span class="text-xl">⚡</span>
+              </div>
+              <div>
+                <h3 class="text-lg font-heading font-semibold text-text-primary mb-1">
+                  Quick Response Promise
+                </h3>
+                <p class="text-text-secondary text-sm">
+                  We understand time is often of the essence for celebrations.
+                  That's why we commit to responding to all inquiries within 24 hours,
+                  usually much sooner.
+                </p>
+              </div>
+            </div>
+          </Card>
+
+          <!-- Business Hours -->
+          <div class="mt-8">
+            <h3 class="text-lg font-heading font-semibold text-text-primary mb-4">
+              Business Hours
+            </h3>
+            <div class="space-y-2 text-text-secondary">
+              <div class="flex justify-between">
+                <span>Monday - Friday</span>
+                <span class="text-text-primary">9:00 AM - 6:00 PM (GMT+1)</span>
+              </div>
+              <div class="flex justify-between">
+                <span>Saturday</span>
+                <span class="text-text-primary">10:00 AM - 4:00 PM (GMT+1)</span>
+              </div>
+              <div class="flex justify-between">
+                <span>Sunday</span>
+                <span class="text-text-muted">Closed</span>
+              </div>
+            </div>
+            <p class="mt-4 text-sm text-text-muted">
+              We monitor messages outside business hours for urgent requests.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA Section -->
+  <section class="py-16 md:py-24 bg-primary-cardBlack">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+      <h2 class="text-3xl md:text-4xl font-heading font-bold text-text-primary mb-4">
+        Ready to Get Started?
+      </h2>
+      <p class="text-lg text-text-secondary mb-8">
+        Skip the questions and jump straight to ordering your custom song.
+        Our questionnaire will gather all the details we need.
+      </p>
+      <a
+        href="/order/wedding"
+        class="inline-flex items-center justify-center px-8 py-4 bg-accent-gold text-primary-black text-lg font-medium rounded-lg hover:bg-accent-goldHover transition-colors"
+      >
+        Order Your Song Now
+      </a>
+    </div>
+  </section>
+</PublicLayout>
+
+<script>
+  const form = document.getElementById('contact-form') as HTMLFormElement;
+  const successMessage = document.getElementById('form-success');
+  const errorMessage = document.getElementById('form-error');
+
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const formData = new FormData(form);
+    const data = Object.fromEntries(formData);
+
+    // Hide any previous messages
+    successMessage?.classList.add('hidden');
+    errorMessage?.classList.add('hidden');
+
+    // Get submit button and show loading state
+    const submitBtn = form.querySelector('button[type="submit"]');
+    if (submitBtn) {
+      submitBtn.setAttribute('disabled', 'true');
+      submitBtn.textContent = 'Sending...';
+    }
+
+    try {
+      // TODO: Replace with actual API endpoint
+      // const response = await fetch('/api/contact', {
+      //   method: 'POST',
+      //   headers: { 'Content-Type': 'application/json' },
+      //   body: JSON.stringify(data),
+      // });
+      //
+      // if (!response.ok) throw new Error('Failed to send message');
+
+      // Simulate API call for development
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      // Show success message
+      successMessage?.classList.remove('hidden');
+      form.reset();
+    } catch (error) {
+      // Show error message
+      errorMessage?.classList.remove('hidden');
+    } finally {
+      // Reset button
+      if (submitBtn) {
+        submitBtn.removeAttribute('disabled');
+        submitBtn.textContent = 'Send Message';
+      }
+    }
+  });
+</script>

@@ -1,0 +1,422 @@
+---
+/**
+ * Questionnaire Page
+ * Collect story details for custom song creation
+ */
+
+import PublicLayout from '@/layouts/PublicLayout.astro';
+import Card from '@/components/ui/Card.astro';
+import Input from '@/components/ui/Input.astro';
+import Textarea from '@/components/ui/Textarea.astro';
+import Button from '@/components/ui/Button.astro';
+import Badge from '@/components/ui/Badge.astro';
+
+// Get query parameters
+const url = new URL(Astro.request.url);
+const packageSlug = url.searchParams.get('package') || 'classic';
+const occasionSlug = url.searchParams.get('occasion') || 'wedding';
+---
+
+<PublicLayout
+  title="Tell Your Story | Eventune Studios"
+  description="Share the details of your story so we can create the perfect personalized song."
+>
+  <!-- Steps Indicator -->
+  <section class="py-8 bg-primary-cardBlack border-b border-text-muted/20">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-center gap-2 md:gap-4">
+        {[
+          { step: 1, label: 'Choose Package', active: false, completed: true },
+          { step: 2, label: 'Tell Your Story', active: true, completed: false },
+          { step: 3, label: 'Checkout', active: false, completed: false },
+        ].map(({ step, label, active, completed }) => (
+          <div class="flex items-center">
+            <div class={`flex items-center gap-2 ${active ? 'text-accent-gold' : completed ? 'text-status-success' : 'text-text-muted'}`}>
+              <div class={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                active ? 'bg-accent-gold text-primary-black' :
+                completed ? 'bg-status-success text-primary-black' : 'bg-text-muted/20'
+              }`}>
+                {completed ? (
+                  <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                  </svg>
+                ) : step}
+              </div>
+              <span class="hidden sm:inline text-sm font-medium">{label}</span>
+            </div>
+            {step < 3 && (
+              <div class={`w-8 md:w-16 h-0.5 mx-2 ${completed ? 'bg-status-success' : 'bg-text-muted/20'}`}></div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- Questionnaire Form -->
+  <section class="py-12 md:py-16">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-8">
+        <h1 class="text-3xl md:text-4xl font-heading font-bold text-text-primary mb-2">
+          Tell Us Your Story
+        </h1>
+        <p class="text-text-secondary">
+          The more details you share, the more personal and meaningful your song will be.
+        </p>
+      </div>
+
+      <!-- Order Summary -->
+      <Card variant="bordered" class="border-accent-gold/30 mb-8">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-text-muted text-sm">Selected Package</p>
+            <p class="text-text-primary font-medium" id="package-name">Loading...</p>
+          </div>
+          <div class="text-right">
+            <p class="text-text-muted text-sm">Occasion</p>
+            <p class="text-text-primary font-medium capitalize" id="occasion-name">{occasionSlug}</p>
+          </div>
+          <a
+            href={`/order/${occasionSlug}?package=${packageSlug}`}
+            class="text-sm text-accent-gold hover:text-accent-goldHover transition-colors"
+          >
+            Change
+          </a>
+        </div>
+      </Card>
+
+      <form id="questionnaire-form" class="space-y-8">
+        <!-- Hidden fields -->
+        <input type="hidden" name="package_slug" value={packageSlug} />
+        <input type="hidden" name="occasion_slug" value={occasionSlug} />
+
+        <!-- Section 1: About the Recipient -->
+        <Card variant="elevated">
+          <h2 class="text-xl font-heading font-semibold text-text-primary mb-6 flex items-center gap-2">
+            <span class="w-8 h-8 rounded-full bg-accent-gold/20 flex items-center justify-center text-accent-gold text-sm font-bold">1</span>
+            About the Recipient
+          </h2>
+
+          <div class="space-y-4">
+            <Input
+              label="Who is this song for?"
+              name="recipient_name"
+              placeholder="e.g., Sarah, Mom, John & Mary"
+              required
+              hint="The person or people this song celebrates"
+            />
+
+            <div>
+              <label class="block text-sm font-medium text-text-primary mb-2">
+                Your relationship to them <span class="text-status-error">*</span>
+              </label>
+              <select
+                name="recipient_relationship"
+                required
+                class="w-full px-4 py-3 bg-primary-cardBlack border border-text-muted/30 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-gold/50 focus:border-accent-gold"
+              >
+                <option value="">Select relationship</option>
+                <option value="spouse">Spouse / Partner</option>
+                <option value="parent">Parent</option>
+                <option value="child">Child</option>
+                <option value="sibling">Sibling</option>
+                <option value="friend">Friend</option>
+                <option value="grandparent">Grandparent</option>
+                <option value="other_family">Other Family Member</option>
+                <option value="colleague">Colleague</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+
+            <Input
+              label="When is the occasion?"
+              name="occasion_date"
+              type="date"
+              hint="This helps us prioritize delivery"
+            />
+          </div>
+        </Card>
+
+        <!-- Section 2: Your Story -->
+        <Card variant="elevated">
+          <h2 class="text-xl font-heading font-semibold text-text-primary mb-6 flex items-center gap-2">
+            <span class="w-8 h-8 rounded-full bg-accent-gold/20 flex items-center justify-center text-accent-gold text-sm font-bold">2</span>
+            Your Story
+          </h2>
+
+          <div class="space-y-4">
+            <Textarea
+              label="Tell us about your story"
+              name="story"
+              placeholder="Share the memories, moments, and feelings you want captured in the song. Include specific details, inside jokes, meaningful places, or special phrases that matter to you both..."
+              rows={8}
+              required
+              maxLength={3000}
+              hint="This is the heart of your song. The more detail, the better!"
+            />
+
+            <div class="bg-primary-hoverBlack rounded-lg p-4 text-sm">
+              <p class="text-text-primary font-medium mb-2">Tips for a great story:</p>
+              <ul class="text-text-secondary space-y-1">
+                <li>• How did you meet or when did your relationship begin?</li>
+                <li>• What are your favorite memories together?</li>
+                <li>• What makes this person special to you?</li>
+                <li>• Any nicknames, inside jokes, or special phrases?</li>
+                <li>• What do you want them to feel when they hear this song?</li>
+              </ul>
+            </div>
+          </div>
+        </Card>
+
+        <!-- Section 3: Music Preferences -->
+        <Card variant="elevated">
+          <h2 class="text-xl font-heading font-semibold text-text-primary mb-6 flex items-center gap-2">
+            <span class="w-8 h-8 rounded-full bg-accent-gold/20 flex items-center justify-center text-accent-gold text-sm font-bold">3</span>
+            Music Preferences
+          </h2>
+
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-text-primary mb-2">
+                Preferred genre/style
+              </label>
+              <select
+                name="genre"
+                class="w-full px-4 py-3 bg-primary-cardBlack border border-text-muted/30 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-gold/50 focus:border-accent-gold"
+              >
+                <option value="">Let our artists decide</option>
+                <option value="pop">Pop</option>
+                <option value="rnb">R&B / Soul</option>
+                <option value="acoustic">Acoustic</option>
+                <option value="country">Country</option>
+                <option value="gospel">Gospel</option>
+                <option value="jazz">Jazz</option>
+                <option value="afrobeats">Afrobeats</option>
+                <option value="classical">Classical</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-text-primary mb-2">
+                Mood/Feeling
+              </label>
+              <div class="flex flex-wrap gap-2">
+                {['Romantic', 'Upbeat', 'Emotional', 'Celebratory', 'Nostalgic', 'Inspirational'].map((mood) => (
+                  <label class="mood-tag">
+                    <input type="checkbox" name="moods" value={mood.toLowerCase()} class="sr-only" />
+                    <span class="px-4 py-2 rounded-full border border-text-muted/30 text-text-secondary text-sm cursor-pointer hover:border-accent-gold hover:text-accent-gold transition-colors">
+                      {mood}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <Textarea
+              label="Any specific requests?"
+              name="special_requests"
+              placeholder="Reference songs you like, specific lyrics to include, or anything else we should know..."
+              rows={4}
+              maxLength={1000}
+            />
+          </div>
+        </Card>
+
+        <!-- Currency Selection -->
+        <Card variant="elevated">
+          <h2 class="text-xl font-heading font-semibold text-text-primary mb-6 flex items-center gap-2">
+            <span class="w-8 h-8 rounded-full bg-accent-gold/20 flex items-center justify-center text-accent-gold text-sm font-bold">4</span>
+            Payment Currency
+          </h2>
+
+          <div class="grid grid-cols-2 gap-4">
+            <label class="currency-option">
+              <input type="radio" name="currency" value="USD" checked class="sr-only" />
+              <div class="p-4 rounded-lg border-2 border-accent-gold bg-accent-gold/10 text-center cursor-pointer transition-all">
+                <span class="text-2xl font-bold text-accent-gold">USD</span>
+                <p class="text-text-secondary text-sm mt-1">US Dollar</p>
+                <p class="text-text-muted text-xs">Credit/Debit Card</p>
+              </div>
+            </label>
+            <label class="currency-option">
+              <input type="radio" name="currency" value="XAF" class="sr-only" />
+              <div class="p-4 rounded-lg border-2 border-text-muted/30 text-center cursor-pointer transition-all hover:border-accent-gold/50">
+                <span class="text-2xl font-bold text-text-primary">XAF</span>
+                <p class="text-text-secondary text-sm mt-1">CFA Franc</p>
+                <p class="text-text-muted text-xs">Mobile Money</p>
+              </div>
+            </label>
+          </div>
+        </Card>
+
+        <!-- Error Message -->
+        <div id="error-message" class="hidden p-4 bg-status-error/20 border border-status-error rounded-lg text-status-error">
+        </div>
+
+        <!-- Submit -->
+        <div class="flex flex-col sm:flex-row gap-4">
+          <a
+            href={`/order/${occasionSlug}?package=${packageSlug}`}
+            class="flex-1 inline-flex items-center justify-center px-6 py-4 border border-text-muted text-text-primary rounded-lg hover:border-accent-gold hover:text-accent-gold transition-colors"
+          >
+            &larr; Back
+          </a>
+          <Button type="submit" variant="primary" size="lg" class="flex-1" id="submit-btn">
+            Continue to Checkout
+          </Button>
+        </div>
+      </form>
+    </div>
+  </section>
+</PublicLayout>
+
+<script>
+  import { supabase } from '@/lib/supabase/client';
+
+  const form = document.getElementById('questionnaire-form') as HTMLFormElement;
+  const submitBtn = document.getElementById('submit-btn') as HTMLButtonElement;
+  const errorMessage = document.getElementById('error-message') as HTMLElement;
+  const packageName = document.getElementById('package-name') as HTMLElement;
+
+  // Get URL params
+  const urlParams = new URLSearchParams(window.location.search);
+  const packageSlug = urlParams.get('package') || 'classic';
+  const occasionSlug = urlParams.get('occasion') || 'wedding';
+
+  // Package display names
+  const packageNames: Record<string, string> = {
+    express: 'Express',
+    classic: 'Classic',
+    signature: 'Signature',
+    legacy: 'Legacy',
+  };
+
+  if (packageName) {
+    packageName.textContent = packageNames[packageSlug] || packageSlug;
+  }
+
+  // Currency selection
+  const currencyOptions = document.querySelectorAll('.currency-option');
+  currencyOptions.forEach((option) => {
+    const input = option.querySelector('input') as HTMLInputElement;
+    const div = option.querySelector('div') as HTMLElement;
+
+    input?.addEventListener('change', () => {
+      currencyOptions.forEach((opt) => {
+        const d = opt.querySelector('div');
+        d?.classList.remove('border-accent-gold', 'bg-accent-gold/10');
+        d?.classList.add('border-text-muted/30');
+      });
+
+      if (input.checked) {
+        div?.classList.remove('border-text-muted/30');
+        div?.classList.add('border-accent-gold', 'bg-accent-gold/10');
+      }
+    });
+  });
+
+  // Mood tags
+  const moodTags = document.querySelectorAll('.mood-tag');
+  moodTags.forEach((tag) => {
+    const input = tag.querySelector('input') as HTMLInputElement;
+    const span = tag.querySelector('span') as HTMLElement;
+
+    tag.addEventListener('click', () => {
+      input.checked = !input.checked;
+      if (input.checked) {
+        span?.classList.remove('border-text-muted/30', 'text-text-secondary');
+        span?.classList.add('border-accent-gold', 'bg-accent-gold/10', 'text-accent-gold');
+      } else {
+        span?.classList.add('border-text-muted/30', 'text-text-secondary');
+        span?.classList.remove('border-accent-gold', 'bg-accent-gold/10', 'text-accent-gold');
+      }
+    });
+  });
+
+  function showError(message: string) {
+    errorMessage.textContent = message;
+    errorMessage?.classList.remove('hidden');
+    errorMessage?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  function hideError() {
+    errorMessage?.classList.add('hidden');
+  }
+
+  // Check auth on load
+  supabase.auth.getSession().then(({ data: { session } }) => {
+    if (!session) {
+      // Save current URL and redirect to login
+      const returnUrl = window.location.pathname + window.location.search;
+      window.location.href = `/auth/login?redirectTo=${encodeURIComponent(returnUrl)}`;
+    }
+  });
+
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    hideError();
+
+    const formData = new FormData(form);
+
+    // Collect moods
+    const moods: string[] = [];
+    formData.getAll('moods').forEach((mood) => moods.push(mood as string));
+
+    const data = {
+      package_slug: formData.get('package_slug'),
+      occasion_slug: formData.get('occasion_slug'),
+      currency: formData.get('currency'),
+      questionnaire: {
+        recipient_name: formData.get('recipient_name'),
+        recipient_relationship: formData.get('recipient_relationship'),
+        occasion_date: formData.get('occasion_date') || undefined,
+        story: formData.get('story'),
+        genre: formData.get('genre') || undefined,
+        moods: moods.length > 0 ? moods : undefined,
+        special_requests: formData.get('special_requests') || undefined,
+      },
+    };
+
+    // Validate
+    if (!data.questionnaire.recipient_name || !data.questionnaire.story) {
+      showError('Please fill in all required fields.');
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Processing...';
+
+    try {
+      const response = await fetch('/api/orders/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        showError(result.error || 'Failed to create order. Please try again.');
+        return;
+      }
+
+      // Redirect to checkout
+      window.location.href = `/order/checkout?order_id=${result.order_id}&currency=${data.currency}`;
+
+    } catch (error) {
+      console.error('Order creation error:', error);
+      showError('An unexpected error occurred. Please try again.');
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Continue to Checkout';
+    }
+  });
+</script>
+
+<style>
+  .mood-tag input:checked + span {
+    border-color: var(--color-accent-gold);
+    background-color: rgba(var(--color-accent-gold-rgb), 0.1);
+    color: var(--color-accent-gold);
+  }
+</style>

@@ -1,0 +1,256 @@
+---
+/**
+ * About Page
+ * Company story, mission, and team
+ */
+
+import PublicLayout from '@/layouts/PublicLayout.astro';
+import Card from '@/components/ui/Card.astro';
+import { brandConfig, siteConfig } from '@/config';
+
+// Company values
+const values = [
+  {
+    icon: '💝',
+    title: 'Personal Connection',
+    description: 'Every song we create is deeply personal. We take the time to understand your story before we put pen to paper.',
+  },
+  {
+    icon: '🎵',
+    title: 'Musical Excellence',
+    description: 'Our network of professional songwriters, producers, and vocalists ensures every song meets the highest standards.',
+  },
+  {
+    icon: '🤝',
+    title: 'Customer First',
+    description: 'Your satisfaction is our priority. We work with you through revisions until the song perfectly captures your vision.',
+  },
+  {
+    icon: '🌍',
+    title: 'Global Reach',
+    description: 'From Douala to New York, we serve customers worldwide, bringing personalized music to celebrations everywhere.',
+  },
+];
+
+// Stats
+const stats = [
+  { number: '500+', label: 'Songs Created' },
+  { number: '15+', label: 'Countries Served' },
+  { number: '98%', label: 'Customer Satisfaction' },
+  { number: '4', label: 'Years of Experience' },
+];
+
+// Process steps
+const processSteps = [
+  {
+    step: 1,
+    title: 'Share Your Story',
+    description: 'Fill out our questionnaire with details about your celebration, the person you\'re honoring, and the memories you want to capture.',
+  },
+  {
+    step: 2,
+    title: 'Consultation',
+    description: 'For Classic packages and above, we schedule a discovery call to dive deeper into your story and discuss musical preferences.',
+  },
+  {
+    step: 3,
+    title: 'Creation',
+    description: 'Our songwriters craft original lyrics, and our producers create a beautiful arrangement tailored to your style.',
+  },
+  {
+    step: 4,
+    title: 'Review & Refine',
+    description: 'You receive your song and can request revisions to ensure it perfectly captures your vision.',
+  },
+  {
+    step: 5,
+    title: 'Delivery',
+    description: 'Your final song is delivered in high-quality audio formats, ready to make your celebration unforgettable.',
+  },
+];
+---
+
+<PublicLayout
+  title="About Us | Eventune Studios"
+  description="Learn about Eventune Studios, our mission to create personalized songs for life's special moments, and the team behind your custom music."
+>
+  <!-- Hero Section -->
+  <section class="py-20 md:py-32 bg-primary-cardBlack relative overflow-hidden">
+    <div class="absolute inset-0 bg-gradient-to-b from-primary-black/50 to-primary-cardBlack"></div>
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+      <div class="max-w-3xl mx-auto text-center">
+        <h1 class="text-4xl md:text-5xl font-heading font-bold text-text-primary mb-6">
+          Turning Stories Into
+          <span class="text-accent-gold">Melodies</span>
+        </h1>
+        <p class="text-lg md:text-xl text-text-secondary">
+          At Eventune Studios, we believe every celebration deserves a soundtrack.
+          We're here to transform your most precious moments into songs you'll treasure forever.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Stats Section -->
+  <section class="py-12 border-b border-text-muted/20">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-8">
+        {stats.map((stat) => (
+          <div class="text-center">
+            <div class="text-4xl md:text-5xl font-heading font-bold text-accent-gold mb-2">
+              {stat.number}
+            </div>
+            <div class="text-text-secondary">{stat.label}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- Our Story Section -->
+  <section class="py-16 md:py-24">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+        <div>
+          <h2 class="text-3xl md:text-4xl font-heading font-bold text-text-primary mb-6">
+            Our Story
+          </h2>
+          <div class="space-y-4 text-text-secondary">
+            <p>
+              Eventune Studios was born from a simple belief: music has the power to capture emotions
+              that words alone cannot express. We started with a dream to help people celebrate their
+              most important moments with songs that are uniquely theirs.
+            </p>
+            <p>
+              What began as a passion project has grown into a trusted service for customers around the
+              world. From intimate birthday surprises to grand wedding celebrations, we've had the
+              privilege of being part of countless special moments.
+            </p>
+            <p>
+              Our team includes talented songwriters, skilled producers, and amazing vocalists who share
+              our commitment to creating music that moves hearts. Every song we create is crafted with
+              care, attention to detail, and a deep respect for the stories entrusted to us.
+            </p>
+          </div>
+        </div>
+        <div class="relative">
+          <div class="aspect-square rounded-2xl bg-gradient-to-br from-accent-gold/20 to-primary-hoverBlack flex items-center justify-center">
+            <div class="text-center">
+              <span class="text-8xl mb-4 block">🎵</span>
+              <p class="text-accent-gold font-heading font-semibold text-xl">Your Event. Your Tune.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Our Values Section -->
+  <section class="py-16 md:py-24 bg-primary-cardBlack">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-12">
+        <h2 class="text-3xl md:text-4xl font-heading font-bold text-text-primary mb-4">
+          Our Values
+        </h2>
+        <p class="text-lg text-text-secondary max-w-2xl mx-auto">
+          These principles guide everything we do at Eventune Studios.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {values.map((value) => (
+          <Card variant="default" class="text-center">
+            <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-accent-gold/10 flex items-center justify-center">
+              <span class="text-3xl">{value.icon}</span>
+            </div>
+            <h3 class="text-xl font-heading font-semibold text-text-primary mb-2">
+              {value.title}
+            </h3>
+            <p class="text-text-secondary text-sm">{value.description}</p>
+          </Card>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- Our Process Section -->
+  <section class="py-16 md:py-24">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-12">
+        <h2 class="text-3xl md:text-4xl font-heading font-bold text-text-primary mb-4">
+          How We Work
+        </h2>
+        <p class="text-lg text-text-secondary max-w-2xl mx-auto">
+          From your first idea to the final song, here's what you can expect.
+        </p>
+      </div>
+
+      <div class="relative">
+        <!-- Timeline line -->
+        <div class="absolute left-8 md:left-1/2 top-0 bottom-0 w-0.5 bg-accent-gold/30 transform md:-translate-x-1/2"></div>
+
+        <div class="space-y-8">
+          {processSteps.map((step, index) => (
+            <div class={`relative flex items-start gap-6 ${index % 2 === 0 ? 'md:flex-row' : 'md:flex-row-reverse'}`}>
+              <!-- Step number -->
+              <div class="flex-shrink-0 w-16 h-16 rounded-full bg-accent-gold flex items-center justify-center text-2xl font-heading font-bold text-primary-black z-10">
+                {step.step}
+              </div>
+
+              <!-- Content -->
+              <Card variant="elevated" class="flex-1 md:max-w-md">
+                <h3 class="text-xl font-heading font-semibold text-text-primary mb-2">
+                  {step.title}
+                </h3>
+                <p class="text-text-secondary">{step.description}</p>
+              </Card>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Mission Section -->
+  <section class="py-16 md:py-24 bg-primary-cardBlack">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+      <h2 class="text-3xl md:text-4xl font-heading font-bold text-text-primary mb-6">
+        Our Mission
+      </h2>
+      <blockquote class="text-xl md:text-2xl text-text-secondary italic mb-8">
+        "To create personalized music that captures the essence of life's most meaningful moments,
+        making every celebration more memorable, more emotional, and uniquely yours."
+      </blockquote>
+      <div class="inline-flex items-center gap-2 text-accent-gold">
+        <span class="font-heading font-semibold">The Eventune Studios Team</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA Section -->
+  <section class="py-16 md:py-24">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+      <h2 class="text-3xl md:text-4xl font-heading font-bold text-text-primary mb-4">
+        Let's Create Something Beautiful
+      </h2>
+      <p class="text-lg text-text-secondary mb-8">
+        Ready to turn your story into a song? We'd love to hear about your celebration
+        and help you create a moment that will be remembered forever.
+      </p>
+      <div class="flex flex-col sm:flex-row gap-4 justify-center">
+        <a
+          href="/order/wedding"
+          class="inline-flex items-center justify-center px-8 py-4 bg-accent-gold text-primary-black text-lg font-medium rounded-lg hover:bg-accent-goldHover transition-colors"
+        >
+          Start Your Order
+        </a>
+        <a
+          href="/contact"
+          class="inline-flex items-center justify-center px-8 py-4 border-2 border-text-muted text-text-primary text-lg font-medium rounded-lg hover:border-accent-gold hover:text-accent-gold transition-colors"
+        >
+          Get in Touch
+        </a>
+      </div>
+    </div>
+  </section>
+</PublicLayout>

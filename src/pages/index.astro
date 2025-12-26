@@ -1,0 +1,577 @@
+---
+/**
+ * Home Page
+ * Main landing page with hero, packages, occasions, testimonials, FAQ, and CTA
+ */
+
+import PublicLayout from '@/layouts/PublicLayout.astro';
+import Card from '@/components/ui/Card.astro';
+import Badge from '@/components/ui/Badge.astro';
+import Accordion from '@/components/ui/Accordion.astro';
+import { brandConfig, siteConfig } from '@/config';
+import {
+  getPackages,
+  getOccasions,
+  getTestimonials,
+  getFAQs,
+  type Package,
+  type Occasion,
+  type Testimonial,
+  type FAQ,
+} from '@/services/config.service';
+
+// Fetch data from config service with fallbacks for development
+let packages: Package[] = [];
+let occasions: Occasion[] = [];
+let testimonials: Testimonial[] = [];
+let faqs: FAQ[] = [];
+
+try {
+  [packages, occasions, testimonials, faqs] = await Promise.all([
+    getPackages(),
+    getOccasions(),
+    getTestimonials({ featured: true, limit: 6 }),
+    getFAQs('en'),
+  ]);
+} catch (error) {
+  console.error('Error fetching config data:', error);
+  // Fallback data for development when database isn't connected
+  packages = [
+    {
+      id: '1',
+      slug: 'express',
+      name: 'Express',
+      description: 'Quick turnaround for time-sensitive celebrations',
+      price_usd: 149,
+      price_xaf: 75000,
+      song_length_min: 60,
+      song_length_max: 90,
+      includes_discovery_call: false,
+      revision_count: 1,
+      includes_instrumental: false,
+      includes_full_rights: false,
+      delivery_days_min: 5,
+      delivery_days_max: 7,
+      display_order: 1,
+      is_popular: false,
+      is_active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    {
+      id: '2',
+      slug: 'classic',
+      name: 'Classic',
+      description: 'Our most popular package for special moments',
+      price_usd: 299,
+      price_xaf: 150000,
+      song_length_min: 120,
+      song_length_max: 180,
+      includes_discovery_call: true,
+      revision_count: 2,
+      includes_instrumental: false,
+      includes_full_rights: false,
+      delivery_days_min: 7,
+      delivery_days_max: 10,
+      display_order: 2,
+      is_popular: true,
+      is_active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    {
+      id: '3',
+      slug: 'signature',
+      name: 'Signature',
+      description: 'Premium production with instrumental track',
+      price_usd: 499,
+      price_xaf: 250000,
+      song_length_min: 180,
+      song_length_max: 240,
+      includes_discovery_call: true,
+      revision_count: 3,
+      includes_instrumental: true,
+      includes_full_rights: false,
+      delivery_days_min: 10,
+      delivery_days_max: 14,
+      display_order: 3,
+      is_popular: false,
+      is_active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    {
+      id: '4',
+      slug: 'legacy',
+      name: 'Legacy',
+      description: 'Full rights ownership for lasting memories',
+      price_usd: 799,
+      price_xaf: 400000,
+      song_length_min: 240,
+      song_length_max: 300,
+      includes_discovery_call: true,
+      revision_count: 5,
+      includes_instrumental: true,
+      includes_full_rights: true,
+      delivery_days_min: 14,
+      delivery_days_max: 21,
+      display_order: 4,
+      is_popular: false,
+      is_active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+  ] as Package[];
+
+  occasions = [
+    {
+      id: '1',
+      slug: 'wedding',
+      name: 'Wedding',
+      description: 'Celebrate your love story with a custom wedding song',
+      tagline: "The First Dance They'll Never Forget",
+      icon: 'heart',
+      meta_title: 'Custom Wedding Songs',
+      meta_description: 'Create a personalized wedding song for your special day',
+      display_order: 1,
+      is_active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    {
+      id: '2',
+      slug: 'birthday',
+      name: 'Birthday',
+      description: 'Make their birthday unforgettable with a personalized song',
+      tagline: 'A Gift That Sings Their Story',
+      icon: 'cake',
+      meta_title: 'Custom Birthday Songs',
+      meta_description: 'Create a unique birthday song gift',
+      display_order: 2,
+      is_active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    {
+      id: '3',
+      slug: 'anniversary',
+      name: 'Anniversary',
+      description: 'Commemorate your journey together with a heartfelt song',
+      tagline: 'Celebrate Your Journey in Song',
+      icon: 'rings',
+      meta_title: 'Custom Anniversary Songs',
+      meta_description: 'Create a romantic anniversary song',
+      display_order: 3,
+      is_active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    {
+      id: '4',
+      slug: 'graduation',
+      name: 'Graduation',
+      description: 'Honor their achievement with a celebratory song',
+      tagline: 'A Musical Milestone',
+      icon: 'cap',
+      meta_title: 'Custom Graduation Songs',
+      meta_description: 'Create a graduation celebration song',
+      display_order: 4,
+      is_active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+  ] as Occasion[];
+
+  testimonials = [
+    {
+      id: '1',
+      customer_name: 'Sarah & Michael',
+      customer_location: 'New York, USA',
+      occasion: 'wedding',
+      quote: 'Our wedding song was absolutely perfect. Every guest was in tears during our first dance. This was the most meaningful gift we could have given each other.',
+      rating: 5,
+      is_featured: true,
+      is_active: true,
+      display_order: 1,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    {
+      id: '2',
+      customer_name: 'James',
+      customer_location: 'Douala, Cameroon',
+      occasion: 'birthday',
+      quote: "I surprised my mother on her 60th birthday with a custom song. She couldn't stop crying. It captured her entire life story beautifully.",
+      rating: 5,
+      is_featured: true,
+      is_active: true,
+      display_order: 2,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    {
+      id: '3',
+      customer_name: 'The Johnsons',
+      customer_location: 'London, UK',
+      occasion: 'anniversary',
+      quote: 'For our 25th anniversary, we wanted something truly special. This song perfectly captured our journey together. We play it every year now.',
+      rating: 5,
+      is_featured: true,
+      is_active: true,
+      display_order: 3,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+  ] as Testimonial[];
+
+  faqs = [
+    {
+      id: '1',
+      question: 'How does the process work?',
+      answer: 'Simply choose your package, fill out our questionnaire about your story, and we handle the rest. You will receive your custom song within the delivery timeframe for your chosen package.',
+      category: 'general',
+      locale: 'en',
+      display_order: 1,
+      is_active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    {
+      id: '2',
+      question: 'Can I request revisions?',
+      answer: 'Yes! Each package includes a set number of revisions. Express includes 1 revision, Classic includes 2, Signature includes 3, and Legacy includes 5 revisions.',
+      category: 'general',
+      locale: 'en',
+      display_order: 2,
+      is_active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    {
+      id: '3',
+      question: 'What genres can you create?',
+      answer: 'We work with a network of talented artists who specialize in various genres including pop, R&B, soul, acoustic, country, gospel, and more. Let us know your preference in the questionnaire.',
+      category: 'general',
+      locale: 'en',
+      display_order: 3,
+      is_active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    {
+      id: '4',
+      question: 'Do I own the rights to my song?',
+      answer: 'With the Legacy package, you receive full ownership rights. Other packages grant you a personal use license, which covers playing at events, sharing with family, and personal enjoyment.',
+      category: 'pricing',
+      locale: 'en',
+      display_order: 4,
+      is_active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    {
+      id: '5',
+      question: 'What payment methods do you accept?',
+      answer: 'We accept credit/debit cards (Visa, Mastercard) via Stripe for USD payments, and MTN Mobile Money and Orange Money for XAF payments in Cameroon.',
+      category: 'pricing',
+      locale: 'en',
+      display_order: 5,
+      is_active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+  ] as FAQ[];
+}
+
+// Prepare FAQ items for accordion
+const faqItems = faqs.map((faq) => ({
+  id: faq.id,
+  title: faq.question,
+  content: faq.answer,
+}));
+
+// Icon mapping for occasions
+const occasionIcons: Record<string, string> = {
+  heart: '\u{1F48D}', // Ring emoji for wedding
+  cake: '\u{1F382}',  // Birthday cake
+  rings: '\u{1F495}', // Two hearts
+  cap: '\u{1F393}',   // Graduation cap
+};
+
+// Format delivery time
+const formatDelivery = (min: number, max: number) => {
+  if (min === max) return `${min} days`;
+  return `${min}-${max} days`;
+};
+---
+
+<PublicLayout
+  title={siteConfig.seo.defaultTitle}
+  description={siteConfig.seo.defaultDescription}
+>
+  <!-- Hero Section -->
+  <section class="relative overflow-hidden py-20 md:py-32">
+    <div class="absolute inset-0 bg-gradient-to-b from-primary-black via-primary-black/95 to-primary-black"></div>
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+      <div class="max-w-4xl mx-auto text-center">
+        <h1 class="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-heading font-bold text-text-primary mb-6">
+          Your Event.<br />
+          <span class="text-accent-gold">Your Tune.</span>
+        </h1>
+        <p class="text-lg md:text-xl text-text-secondary mb-8 max-w-2xl mx-auto">
+          Professional custom songs crafted for your special moments.
+          Weddings, birthdays, anniversaries, and more — we turn your stories into melodies.
+        </p>
+        <div class="flex flex-col sm:flex-row gap-4 justify-center">
+          <a
+            href="/services"
+            class="inline-flex items-center justify-center px-8 py-4 bg-accent-gold text-primary-black text-lg font-medium rounded-lg hover:bg-accent-goldHover transition-colors"
+          >
+            Explore Packages
+          </a>
+          <a
+            href="/samples"
+            class="inline-flex items-center justify-center px-8 py-4 border-2 border-text-muted text-text-primary text-lg font-medium rounded-lg hover:border-accent-gold hover:text-accent-gold transition-colors"
+          >
+            Listen to Samples
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How It Works Section -->
+  <section class="py-16 md:py-24 bg-primary-cardBlack">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-12">
+        <h2 class="text-3xl md:text-4xl font-heading font-bold text-text-primary mb-4">
+          How It Works
+        </h2>
+        <p class="text-lg text-text-secondary max-w-2xl mx-auto">
+          Creating your custom song is simple. Here's the journey from story to song.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
+        {[
+          { step: 1, title: 'Choose', description: 'Select your package and occasion' },
+          { step: 2, title: 'Share', description: 'Tell us your story and memories' },
+          { step: 3, title: 'Create', description: 'We craft your personalized song' },
+          { step: 4, title: 'Receive', description: 'Get your song delivered digitally' },
+        ].map(({ step, title, description }) => (
+          <div class="text-center">
+            <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-accent-gold/20 flex items-center justify-center">
+              <span class="text-2xl font-heading font-bold text-accent-gold">{step}</span>
+            </div>
+            <h3 class="text-xl font-heading font-semibold text-text-primary mb-2">{title}</h3>
+            <p class="text-text-secondary">{description}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- Packages Section -->
+  <section class="py-16 md:py-24">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-12">
+        <h2 class="text-3xl md:text-4xl font-heading font-bold text-text-primary mb-4">
+          Choose Your Package
+        </h2>
+        <p class="text-lg text-text-secondary max-w-2xl mx-auto">
+          From quick turnarounds to premium productions, we have options for every celebration.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {packages.map((pkg) => (
+          <Card
+            variant={pkg.is_popular ? 'bordered' : 'elevated'}
+            hover
+            class={`relative ${pkg.is_popular ? 'border-accent-gold' : ''}`}
+          >
+            {pkg.is_popular && (
+              <div class="absolute -top-3 left-1/2 -translate-x-1/2">
+                <Badge variant="gold">Most Popular</Badge>
+              </div>
+            )}
+            <h3 class="text-xl font-heading font-semibold text-text-primary mb-2">{pkg.name}</h3>
+            <p class="text-text-secondary text-sm mb-4 min-h-[40px]">{pkg.description}</p>
+            <div class="mb-4">
+              <span class="text-3xl font-bold text-accent-gold">${pkg.price_usd}</span>
+              <span class="text-text-muted text-sm ml-2">USD</span>
+            </div>
+            <ul class="space-y-2 mb-6 text-sm text-text-secondary">
+              <li class="flex items-center gap-2">
+                <svg class="w-4 h-4 text-accent-gold" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                </svg>
+                {formatDelivery(pkg.delivery_days_min, pkg.delivery_days_max)} delivery
+              </li>
+              <li class="flex items-center gap-2">
+                <svg class="w-4 h-4 text-accent-gold" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                </svg>
+                {pkg.revision_count} revision{pkg.revision_count !== 1 ? 's' : ''}
+              </li>
+              {pkg.includes_discovery_call && (
+                <li class="flex items-center gap-2">
+                  <svg class="w-4 h-4 text-accent-gold" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                  </svg>
+                  Discovery call
+                </li>
+              )}
+              {pkg.includes_instrumental && (
+                <li class="flex items-center gap-2">
+                  <svg class="w-4 h-4 text-accent-gold" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                  </svg>
+                  Instrumental track
+                </li>
+              )}
+              {pkg.includes_full_rights && (
+                <li class="flex items-center gap-2">
+                  <svg class="w-4 h-4 text-accent-gold" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                  </svg>
+                  Full ownership rights
+                </li>
+              )}
+            </ul>
+            <a
+              href={`/order/wedding?package=${pkg.slug}`}
+              class="block w-full px-4 py-2 text-center border border-text-muted text-text-primary rounded-lg hover:border-accent-gold hover:text-accent-gold transition-colors"
+            >
+              Select Package
+            </a>
+          </Card>
+        ))}
+      </div>
+
+      <p class="text-center text-text-muted mt-8">
+        Cameroon pricing available in XAF.
+        <a href="/services" class="text-accent-gold hover:text-accent-goldHover transition-colors ml-1">
+          View all pricing
+        </a>
+      </p>
+    </div>
+  </section>
+
+  <!-- Occasions Section -->
+  <section class="py-16 md:py-24 bg-primary-cardBlack">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-12">
+        <h2 class="text-3xl md:text-4xl font-heading font-bold text-text-primary mb-4">
+          Every Occasion Deserves a Song
+        </h2>
+        <p class="text-lg text-text-secondary max-w-2xl mx-auto">
+          Whether it's a milestone celebration or an everyday moment made special.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        {occasions.map((occasion) => (
+          <a href={`/order/${occasion.slug}`} class="group">
+            <Card hover variant="default" class="text-center h-full">
+              <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-accent-gold/10 flex items-center justify-center group-hover:bg-accent-gold/20 transition-colors">
+                <span class="text-2xl">
+                  {occasionIcons[occasion.icon || 'heart'] || occasionIcons.heart}
+                </span>
+              </div>
+              <h3 class="text-xl font-heading font-semibold text-text-primary mb-2 group-hover:text-accent-gold transition-colors">
+                {occasion.name}
+              </h3>
+              <p class="text-text-secondary text-sm">{occasion.tagline}</p>
+            </Card>
+          </a>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- Testimonials Section -->
+  {testimonials.length > 0 && (
+    <section class="py-16 md:py-24">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="text-center mb-12">
+          <h2 class="text-3xl md:text-4xl font-heading font-bold text-text-primary mb-4">
+            What Our Customers Say
+          </h2>
+          <p class="text-lg text-text-secondary max-w-2xl mx-auto">
+            Real stories from real people who turned their moments into melodies.
+          </p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {testimonials.map((testimonial) => (
+            <Card variant="elevated" class="flex flex-col">
+              <div class="flex items-center gap-1 mb-4">
+                {Array.from({ length: testimonial.rating || 5 }).map(() => (
+                  <svg class="w-5 h-5 text-accent-gold" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                  </svg>
+                ))}
+              </div>
+              <blockquote class="flex-1 text-text-secondary mb-4 italic">
+                "{testimonial.quote}"
+              </blockquote>
+              <div class="pt-4 border-t border-text-muted/20">
+                <p class="font-medium text-text-primary">{testimonial.customer_name}</p>
+                <p class="text-sm text-text-muted">{testimonial.customer_location}</p>
+              </div>
+            </Card>
+          ))}
+        </div>
+      </div>
+    </section>
+  )}
+
+  <!-- FAQ Section -->
+  {faqs.length > 0 && (
+    <section class="py-16 md:py-24 bg-primary-cardBlack">
+      <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="text-center mb-12">
+          <h2 class="text-3xl md:text-4xl font-heading font-bold text-text-primary mb-4">
+            Frequently Asked Questions
+          </h2>
+          <p class="text-lg text-text-secondary">
+            Everything you need to know about our custom song service.
+          </p>
+        </div>
+
+        <Accordion items={faqItems} />
+
+        <p class="text-center text-text-secondary mt-8">
+          Have more questions?
+          <a href="/contact" class="text-accent-gold hover:text-accent-goldHover transition-colors ml-1">
+            Contact us
+          </a>
+        </p>
+      </div>
+    </section>
+  )}
+
+  <!-- CTA Section -->
+  <section class="py-16 md:py-24">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <Card
+        variant="bordered"
+        class="bg-gradient-to-r from-primary-cardBlack to-primary-hoverBlack border-accent-gold/30 text-center py-12 md:py-16"
+      >
+        <h2 class="text-3xl md:text-4xl font-heading font-bold text-text-primary mb-4">
+          Ready to Create Something Special?
+        </h2>
+        <p class="text-lg text-text-secondary max-w-xl mx-auto mb-8">
+          Start your journey today. Your story deserves to be told in song.
+        </p>
+        <a
+          href="/order/wedding"
+          class="inline-flex items-center justify-center px-10 py-4 bg-accent-gold text-primary-black text-lg font-medium rounded-lg hover:bg-accent-goldHover transition-colors"
+        >
+          Get Started Now
+        </a>
+      </Card>
+    </div>
+  </section>
+</PublicLayout>

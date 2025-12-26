@@ -1,0 +1,544 @@
+---
+/**
+ * Services Page
+ * Detailed pricing cards with package comparison
+ */
+
+import PublicLayout from '@/layouts/PublicLayout.astro';
+import Card from '@/components/ui/Card.astro';
+import Badge from '@/components/ui/Badge.astro';
+import { siteConfig } from '@/config';
+import {
+  getPackages,
+  type Package,
+} from '@/services/config.service';
+
+// Fetch packages from config service
+let packages: Package[] = [];
+
+try {
+  packages = await getPackages();
+} catch (error) {
+  console.error('Error fetching packages:', error);
+  // Fallback data for development
+  packages = [
+    {
+      id: '1',
+      slug: 'express',
+      name: 'Express',
+      description: 'Quick turnaround for time-sensitive celebrations. Perfect when you need a beautiful song fast.',
+      price_usd: 149,
+      price_xaf: 75000,
+      song_length_min: 60,
+      song_length_max: 90,
+      includes_discovery_call: false,
+      revision_count: 1,
+      includes_instrumental: false,
+      includes_full_rights: false,
+      delivery_days_min: 5,
+      delivery_days_max: 7,
+      display_order: 1,
+      is_popular: false,
+      is_active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    {
+      id: '2',
+      slug: 'classic',
+      name: 'Classic',
+      description: 'Our most popular package. Includes a discovery call to capture every detail of your story.',
+      price_usd: 299,
+      price_xaf: 150000,
+      song_length_min: 120,
+      song_length_max: 180,
+      includes_discovery_call: true,
+      revision_count: 2,
+      includes_instrumental: false,
+      includes_full_rights: false,
+      delivery_days_min: 7,
+      delivery_days_max: 10,
+      display_order: 2,
+      is_popular: true,
+      is_active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    {
+      id: '3',
+      slug: 'signature',
+      name: 'Signature',
+      description: 'Premium production with instrumental track included. Perfect for events where you want the full experience.',
+      price_usd: 499,
+      price_xaf: 250000,
+      song_length_min: 180,
+      song_length_max: 240,
+      includes_discovery_call: true,
+      revision_count: 3,
+      includes_instrumental: true,
+      includes_full_rights: false,
+      delivery_days_min: 10,
+      delivery_days_max: 14,
+      display_order: 3,
+      is_popular: false,
+      is_active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    {
+      id: '4',
+      slug: 'legacy',
+      name: 'Legacy',
+      description: 'The ultimate package with full ownership rights. Your song, forever yours to use commercially.',
+      price_usd: 799,
+      price_xaf: 400000,
+      song_length_min: 240,
+      song_length_max: 300,
+      includes_discovery_call: true,
+      revision_count: 5,
+      includes_instrumental: true,
+      includes_full_rights: true,
+      delivery_days_min: 14,
+      delivery_days_max: 21,
+      display_order: 4,
+      is_popular: false,
+      is_active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+  ] as Package[];
+}
+
+// Format song length
+const formatSongLength = (min: number, max: number) => {
+  const minMinutes = Math.floor(min / 60);
+  const maxMinutes = Math.floor(max / 60);
+  const minSecs = min % 60;
+  const maxSecs = max % 60;
+
+  const formatTime = (mins: number, secs: number) => {
+    if (secs === 0) return `${mins}:00`;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  return `${formatTime(minMinutes, minSecs)} - ${formatTime(maxMinutes, maxSecs)}`;
+};
+
+// Format delivery time
+const formatDelivery = (min: number, max: number) => {
+  if (min === max) return `${min} days`;
+  return `${min}-${max} days`;
+};
+
+// Feature comparison data
+const features = [
+  { name: 'Song Length', key: 'length' },
+  { name: 'Delivery Time', key: 'delivery' },
+  { name: 'Revisions', key: 'revisions' },
+  { name: 'Discovery Call', key: 'discovery' },
+  { name: 'Instrumental Track', key: 'instrumental' },
+  { name: 'Full Ownership Rights', key: 'rights' },
+  { name: 'Commercial Use', key: 'commercial' },
+];
+---
+
+<PublicLayout
+  title="Services & Pricing | Eventune Studios"
+  description="Choose the perfect package for your custom song. From express delivery to premium productions with full rights ownership."
+>
+  <!-- Hero Section -->
+  <section class="py-16 md:py-24 bg-primary-cardBlack">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+      <h1 class="text-4xl md:text-5xl font-heading font-bold text-text-primary mb-4">
+        Services & Pricing
+      </h1>
+      <p class="text-lg text-text-secondary max-w-2xl mx-auto">
+        Every celebration deserves a song that tells your story. Choose the package that fits your needs.
+      </p>
+    </div>
+  </section>
+
+  <!-- Pricing Cards -->
+  <section class="py-16 md:py-24">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <!-- Currency Toggle -->
+      <div class="flex justify-center mb-12">
+        <div class="inline-flex items-center gap-2 p-1 bg-primary-cardBlack rounded-lg" id="currency-toggle">
+          <button
+            type="button"
+            class="px-4 py-2 text-sm font-medium rounded-md transition-colors currency-btn active"
+            data-currency="USD"
+          >
+            USD ($)
+          </button>
+          <button
+            type="button"
+            class="px-4 py-2 text-sm font-medium rounded-md transition-colors currency-btn"
+            data-currency="XAF"
+          >
+            XAF (CFA)
+          </button>
+        </div>
+      </div>
+
+      <!-- Package Cards -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8">
+        {packages.map((pkg) => (
+          <Card
+            variant={pkg.is_popular ? 'bordered' : 'elevated'}
+            class={`relative flex flex-col ${pkg.is_popular ? 'border-accent-gold lg:scale-105 lg:z-10' : ''}`}
+          >
+            {pkg.is_popular && (
+              <div class="absolute -top-3 left-1/2 -translate-x-1/2">
+                <Badge variant="gold">Most Popular</Badge>
+              </div>
+            )}
+
+            <div class="flex-1">
+              <h3 class="text-2xl font-heading font-bold text-text-primary mb-2">{pkg.name}</h3>
+              <p class="text-text-secondary text-sm mb-6 min-h-[60px]">{pkg.description}</p>
+
+              <!-- Price -->
+              <div class="mb-6">
+                <div class="price-display" data-usd={pkg.price_usd} data-xaf={pkg.price_xaf}>
+                  <span class="text-4xl font-bold text-accent-gold price-value">${pkg.price_usd}</span>
+                  <span class="text-text-muted text-sm ml-1 price-currency">USD</span>
+                </div>
+              </div>
+
+              <!-- Features List -->
+              <ul class="space-y-3 mb-8">
+                <li class="flex items-start gap-3">
+                  <svg class="w-5 h-5 text-accent-gold mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                  </svg>
+                  <span class="text-text-secondary">
+                    <strong class="text-text-primary">Song Length:</strong> {formatSongLength(pkg.song_length_min, pkg.song_length_max)}
+                  </span>
+                </li>
+                <li class="flex items-start gap-3">
+                  <svg class="w-5 h-5 text-accent-gold mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                  </svg>
+                  <span class="text-text-secondary">
+                    <strong class="text-text-primary">Delivery:</strong> {formatDelivery(pkg.delivery_days_min, pkg.delivery_days_max)}
+                  </span>
+                </li>
+                <li class="flex items-start gap-3">
+                  <svg class="w-5 h-5 text-accent-gold mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                  </svg>
+                  <span class="text-text-secondary">
+                    <strong class="text-text-primary">Revisions:</strong> {pkg.revision_count}
+                  </span>
+                </li>
+                {pkg.includes_discovery_call && (
+                  <li class="flex items-start gap-3">
+                    <svg class="w-5 h-5 text-accent-gold mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                    </svg>
+                    <span class="text-text-secondary">Discovery call included</span>
+                  </li>
+                )}
+                {pkg.includes_instrumental && (
+                  <li class="flex items-start gap-3">
+                    <svg class="w-5 h-5 text-accent-gold mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                    </svg>
+                    <span class="text-text-secondary">Instrumental track included</span>
+                  </li>
+                )}
+                {pkg.includes_full_rights && (
+                  <li class="flex items-start gap-3">
+                    <svg class="w-5 h-5 text-accent-gold mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                    </svg>
+                    <span class="text-text-secondary">Full ownership rights</span>
+                  </li>
+                )}
+              </ul>
+            </div>
+
+            <!-- CTA Button -->
+            <a
+              href={`/order/wedding?package=${pkg.slug}`}
+              class={`block w-full px-6 py-3 text-center font-medium rounded-lg transition-colors ${
+                pkg.is_popular
+                  ? 'bg-accent-gold text-primary-black hover:bg-accent-goldHover'
+                  : 'border border-text-muted text-text-primary hover:border-accent-gold hover:text-accent-gold'
+              }`}
+            >
+              Choose {pkg.name}
+            </a>
+          </Card>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- Feature Comparison Table -->
+  <section class="py-16 md:py-24 bg-primary-cardBlack">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-12">
+        <h2 class="text-3xl md:text-4xl font-heading font-bold text-text-primary mb-4">
+          Compare Packages
+        </h2>
+        <p class="text-lg text-text-secondary">
+          See all features side by side to make the best choice for your needs.
+        </p>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full">
+          <thead>
+            <tr class="border-b border-text-muted/30">
+              <th class="py-4 px-4 text-left text-text-primary font-heading font-semibold">Feature</th>
+              {packages.map((pkg) => (
+                <th class="py-4 px-4 text-center">
+                  <span class={`font-heading font-semibold ${pkg.is_popular ? 'text-accent-gold' : 'text-text-primary'}`}>
+                    {pkg.name}
+                  </span>
+                  {pkg.is_popular && (
+                    <span class="block text-xs text-accent-gold mt-1">Most Popular</span>
+                  )}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            <!-- Price Row -->
+            <tr class="border-b border-text-muted/20">
+              <td class="py-4 px-4 text-text-secondary">Price (USD)</td>
+              {packages.map((pkg) => (
+                <td class="py-4 px-4 text-center">
+                  <span class="text-accent-gold font-bold">${pkg.price_usd}</span>
+                </td>
+              ))}
+            </tr>
+            <tr class="border-b border-text-muted/20">
+              <td class="py-4 px-4 text-text-secondary">Price (XAF)</td>
+              {packages.map((pkg) => (
+                <td class="py-4 px-4 text-center">
+                  <span class="text-accent-gold font-bold">{pkg.price_xaf.toLocaleString()} CFA</span>
+                </td>
+              ))}
+            </tr>
+            <!-- Song Length -->
+            <tr class="border-b border-text-muted/20">
+              <td class="py-4 px-4 text-text-secondary">Song Length</td>
+              {packages.map((pkg) => (
+                <td class="py-4 px-4 text-center text-text-primary">
+                  {formatSongLength(pkg.song_length_min, pkg.song_length_max)}
+                </td>
+              ))}
+            </tr>
+            <!-- Delivery -->
+            <tr class="border-b border-text-muted/20">
+              <td class="py-4 px-4 text-text-secondary">Delivery Time</td>
+              {packages.map((pkg) => (
+                <td class="py-4 px-4 text-center text-text-primary">
+                  {formatDelivery(pkg.delivery_days_min, pkg.delivery_days_max)}
+                </td>
+              ))}
+            </tr>
+            <!-- Revisions -->
+            <tr class="border-b border-text-muted/20">
+              <td class="py-4 px-4 text-text-secondary">Revisions</td>
+              {packages.map((pkg) => (
+                <td class="py-4 px-4 text-center text-text-primary">{pkg.revision_count}</td>
+              ))}
+            </tr>
+            <!-- Discovery Call -->
+            <tr class="border-b border-text-muted/20">
+              <td class="py-4 px-4 text-text-secondary">Discovery Call</td>
+              {packages.map((pkg) => (
+                <td class="py-4 px-4 text-center">
+                  {pkg.includes_discovery_call ? (
+                    <svg class="w-5 h-5 text-accent-gold mx-auto" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                    </svg>
+                  ) : (
+                    <svg class="w-5 h-5 text-text-muted mx-auto" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                    </svg>
+                  )}
+                </td>
+              ))}
+            </tr>
+            <!-- Instrumental Track -->
+            <tr class="border-b border-text-muted/20">
+              <td class="py-4 px-4 text-text-secondary">Instrumental Track</td>
+              {packages.map((pkg) => (
+                <td class="py-4 px-4 text-center">
+                  {pkg.includes_instrumental ? (
+                    <svg class="w-5 h-5 text-accent-gold mx-auto" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                    </svg>
+                  ) : (
+                    <svg class="w-5 h-5 text-text-muted mx-auto" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                    </svg>
+                  )}
+                </td>
+              ))}
+            </tr>
+            <!-- Full Rights -->
+            <tr class="border-b border-text-muted/20">
+              <td class="py-4 px-4 text-text-secondary">Full Ownership Rights</td>
+              {packages.map((pkg) => (
+                <td class="py-4 px-4 text-center">
+                  {pkg.includes_full_rights ? (
+                    <svg class="w-5 h-5 text-accent-gold mx-auto" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                    </svg>
+                  ) : (
+                    <svg class="w-5 h-5 text-text-muted mx-auto" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                    </svg>
+                  )}
+                </td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- What's Included Section -->
+  <section class="py-16 md:py-24">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-12">
+        <h2 class="text-3xl md:text-4xl font-heading font-bold text-text-primary mb-4">
+          What's Included in Every Package
+        </h2>
+        <p class="text-lg text-text-secondary max-w-2xl mx-auto">
+          All packages include our core features that make every song special.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        {[
+          {
+            icon: '🎵',
+            title: 'Professional Production',
+            description: 'Studio-quality recording and mixing by experienced producers.',
+          },
+          {
+            icon: '✍️',
+            title: 'Custom Lyrics',
+            description: 'Original lyrics written specifically for your story and occasion.',
+          },
+          {
+            icon: '🎤',
+            title: 'Professional Vocalist',
+            description: 'Performed by talented vocalists who bring your song to life.',
+          },
+          {
+            icon: '📱',
+            title: 'Digital Delivery',
+            description: 'High-quality MP3 and WAV files delivered to your inbox.',
+          },
+          {
+            icon: '💝',
+            title: 'Personal License',
+            description: 'Use your song at events, share with family and friends.',
+          },
+          {
+            icon: '🔒',
+            title: 'Secure Process',
+            description: 'Your story and personal details are kept completely confidential.',
+          },
+        ].map((feature) => (
+          <Card variant="default" class="text-center">
+            <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-accent-gold/10 flex items-center justify-center">
+              <span class="text-2xl">{feature.icon}</span>
+            </div>
+            <h3 class="text-xl font-heading font-semibold text-text-primary mb-2">
+              {feature.title}
+            </h3>
+            <p class="text-text-secondary">{feature.description}</p>
+          </Card>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA Section -->
+  <section class="py-16 md:py-24 bg-primary-cardBlack">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+      <h2 class="text-3xl md:text-4xl font-heading font-bold text-text-primary mb-4">
+        Not Sure Which Package?
+      </h2>
+      <p class="text-lg text-text-secondary mb-8">
+        We're here to help you choose the perfect option for your celebration.
+        Get in touch with our team for personalized guidance.
+      </p>
+      <div class="flex flex-col sm:flex-row gap-4 justify-center">
+        <a
+          href="/contact"
+          class="inline-flex items-center justify-center px-8 py-4 bg-accent-gold text-primary-black text-lg font-medium rounded-lg hover:bg-accent-goldHover transition-colors"
+        >
+          Contact Us
+        </a>
+        <a
+          href="/samples"
+          class="inline-flex items-center justify-center px-8 py-4 border-2 border-text-muted text-text-primary text-lg font-medium rounded-lg hover:border-accent-gold hover:text-accent-gold transition-colors"
+        >
+          Listen to Samples
+        </a>
+      </div>
+    </div>
+  </section>
+</PublicLayout>
+
+<script>
+  // Currency toggle functionality
+  const currencyBtns = document.querySelectorAll('.currency-btn');
+  const priceDisplays = document.querySelectorAll('.price-display');
+
+  currencyBtns.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const currency = btn.getAttribute('data-currency');
+
+      // Update active state
+      currencyBtns.forEach((b) => b.classList.remove('active', 'bg-accent-gold', 'text-primary-black'));
+      btn.classList.add('active', 'bg-accent-gold', 'text-primary-black');
+
+      // Update prices
+      priceDisplays.forEach((display) => {
+        const priceValue = display.querySelector('.price-value');
+        const priceCurrency = display.querySelector('.price-currency');
+
+        if (currency === 'USD') {
+          const usd = display.getAttribute('data-usd');
+          if (priceValue) priceValue.textContent = `$${usd}`;
+          if (priceCurrency) priceCurrency.textContent = 'USD';
+        } else {
+          const xaf = parseInt(display.getAttribute('data-xaf') || '0');
+          if (priceValue) priceValue.textContent = xaf.toLocaleString();
+          if (priceCurrency) priceCurrency.textContent = 'CFA';
+        }
+      });
+    });
+  });
+
+  // Initialize first button as active
+  const firstBtn = document.querySelector('.currency-btn.active');
+  if (firstBtn) {
+    firstBtn.classList.add('bg-accent-gold', 'text-primary-black');
+  }
+</script>
+
+<style>
+  .currency-btn {
+    color: var(--color-text-secondary);
+  }
+  .currency-btn:hover:not(.active) {
+    color: var(--color-text-primary);
+  }
+  .currency-btn.active {
+    background-color: var(--color-accent-gold);
+    color: var(--color-primary-black);
+  }
+</style>

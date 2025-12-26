@@ -1,0 +1,273 @@
+---
+/**
+ * Dashboard Layout
+ * Luxurious sidebar navigation with music studio aesthetic
+ *
+ * Security: Uses server-side session validation
+ */
+import { getSession, getFirstName, setCSRFToken } from '../lib/auth/session';
+
+interface Props {
+  title: string;
+  activeNav?: 'dashboard' | 'orders' | 'profile';
+}
+
+const { title, activeNav = 'dashboard' } = Astro.props;
+
+// Get and validate session (single query, server-side)
+const sessionResult = await getSession(Astro.cookies);
+
+// Redirect if not authenticated
+if (!sessionResult.success) {
+  const currentPath = Astro.url.pathname;
+  return Astro.redirect(`/auth/login?redirect=${encodeURIComponent(currentPath)}`);
+}
+
+const { user, profile } = sessionResult.data;
+const firstName = getFirstName(profile);
+
+// Set CSRF token for forms
+const csrfToken = setCSRFToken(Astro.cookies);
+
+// Make session available to child pages via Astro.locals
+Astro.locals.session = sessionResult.data;
+Astro.locals.csrfToken = csrfToken;
+
+const navItems = [
+  {
+    href: '/dashboard',
+    label: 'Dashboard',
+    icon: 'dashboard',
+    active: activeNav === 'dashboard'
+  },
+  {
+    href: '/dashboard/orders',
+    label: 'My Orders',
+    icon: 'orders',
+    active: activeNav === 'orders'
+  },
+  {
+    href: '/dashboard/profile',
+    label: 'Profile',
+    icon: 'profile',
+    active: activeNav === 'profile'
+  },
+];
+---
+
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{title} | Eventune Studios</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+</head>
+<body class="bg-studio-black min-h-screen text-studio-cream antialiased">
+  <!-- Mobile Header -->
+  <header class="lg:hidden fixed top-0 left-0 right-0 z-50 bg-studio-black/95 backdrop-blur-md border-b border-gold/10">
+    <div class="flex items-center justify-between px-4 h-16">
+      <a href="/" class="flex items-center gap-2">
+        <div class="w-8 h-8 rounded-full bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center">
+          <span class="text-studio-black font-bold text-sm">E</span>
+        </div>
+        <span class="font-display text-lg text-gold">Eventune</span>
+      </a>
+      <button
+        id="mobile-menu-btn"
+        class="p-2 text-studio-cream/70 hover:text-gold transition-colors"
+        aria-label="Toggle menu"
+      >
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Mobile Sidebar Overlay -->
+  <div id="mobile-overlay" class="lg:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-40 opacity-0 pointer-events-none transition-opacity duration-300"></div>
+
+  <!-- Sidebar -->
+  <aside id="sidebar" class="fixed left-0 top-0 bottom-0 w-72 bg-studio-card border-r border-gold/10 z-50 transform -translate-x-full lg:translate-x-0 transition-transform duration-300">
+    <!-- Logo -->
+    <div class="h-20 flex items-center px-6 border-b border-gold/10">
+      <a href="/" class="flex items-center gap-3 group">
+        <div class="w-10 h-10 rounded-full bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center shadow-lg shadow-gold/20 group-hover:shadow-gold/40 transition-shadow">
+          <span class="text-studio-black font-bold">E</span>
+        </div>
+        <div>
+          <span class="font-display text-xl text-gold">Eventune</span>
+          <span class="block text-[10px] text-studio-cream/50 tracking-[0.2em] uppercase">Studios</span>
+        </div>
+      </a>
+    </div>
+
+    <!-- User Greeting -->
+    <div class="px-6 py-5 border-b border-gold/5">
+      <div class="flex items-center gap-3">
+        <div class="w-12 h-12 rounded-full bg-gradient-to-br from-gold/20 to-gold/5 border border-gold/20 flex items-center justify-center">
+          <span class="text-gold font-display text-lg">{firstName.charAt(0).toUpperCase()}</span>
+        </div>
+        <div>
+          <p class="text-sm text-studio-cream/50">Welcome back,</p>
+          <p class="font-display text-lg text-studio-cream">{firstName}</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="px-3 py-6">
+      <ul class="space-y-1">
+        {navItems.map((item) => (
+          <li>
+            <a
+              href={item.href}
+              class:list={[
+                "flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 group",
+                item.active
+                  ? "bg-gold/10 text-gold border-l-2 border-gold"
+                  : "text-studio-cream/60 hover:bg-gold/5 hover:text-studio-cream border-l-2 border-transparent"
+              ]}
+            >
+              {item.icon === 'dashboard' && (
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM14 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+                </svg>
+              )}
+              {item.icon === 'orders' && (
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                </svg>
+              )}
+              {item.icon === 'profile' && (
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+              )}
+              <span class="font-medium">{item.label}</span>
+              {item.active && (
+                <div class="ml-auto w-1.5 h-1.5 rounded-full bg-gold animate-pulse"></div>
+              )}
+            </a>
+          </li>
+        ))}
+      </ul>
+
+      <!-- Divider -->
+      <div class="my-6 mx-4 border-t border-gold/10"></div>
+
+      <!-- Logout -->
+      <a
+        href="/auth/logout"
+        class="flex items-center gap-3 px-4 py-3 mx-1 rounded-lg text-studio-cream/40 hover:text-red-400 hover:bg-red-500/10 transition-all duration-200"
+      >
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+        </svg>
+        <span class="font-medium">Sign Out</span>
+      </a>
+    </nav>
+
+    <!-- Studio VU Meter Decoration -->
+    <div class="absolute bottom-6 left-6 right-6">
+      <div class="flex items-end justify-center gap-1 h-8 opacity-30">
+        {[...Array(12)].map((_, i) => (
+          <div
+            class="w-2 bg-gradient-to-t from-gold/50 to-gold rounded-full animate-vu-meter"
+            style={`height: ${20 + Math.random() * 60}%; animation-delay: ${i * 0.1}s;`}
+          ></div>
+        ))}
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="lg:pl-72 min-h-screen">
+    <div class="pt-20 lg:pt-0">
+      <!-- Page Header -->
+      <header class="px-6 lg:px-10 py-8 border-b border-gold/10 bg-gradient-to-r from-studio-card/50 to-transparent">
+        <h1 class="font-display text-3xl lg:text-4xl text-studio-cream">{title}</h1>
+      </header>
+
+      <!-- Page Content -->
+      <div class="p-6 lg:p-10">
+        <slot />
+      </div>
+    </div>
+  </main>
+
+  <style>
+    :root {
+      --studio-black: #0A0A0A;
+      --studio-card: #141414;
+      --studio-cream: #F5F5F5;
+      --gold: #D4AF37;
+      --gold-dark: #B8962E;
+    }
+
+    .bg-studio-black { background-color: var(--studio-black); }
+    .bg-studio-card { background-color: var(--studio-card); }
+    .text-studio-cream { color: var(--studio-cream); }
+    .text-gold { color: var(--gold); }
+    .bg-gold { background-color: var(--gold); }
+    .border-gold { border-color: var(--gold); }
+    .shadow-gold\/20 { --tw-shadow-color: rgba(212, 175, 55, 0.2); }
+    .shadow-gold\/40 { --tw-shadow-color: rgba(212, 175, 55, 0.4); }
+
+    .font-display { font-family: 'Playfair Display', serif; }
+    body { font-family: 'Inter', sans-serif; }
+
+    @keyframes vu-meter {
+      0%, 100% { transform: scaleY(0.3); }
+      50% { transform: scaleY(1); }
+    }
+
+    .animate-vu-meter {
+      animation: vu-meter 1.5s ease-in-out infinite;
+      transform-origin: bottom;
+    }
+
+    /* Custom scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: var(--studio-black);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: var(--gold);
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--gold-dark);
+    }
+  </style>
+
+  <script>
+    // Mobile menu toggle
+    const menuBtn = document.getElementById('mobile-menu-btn');
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('mobile-overlay');
+
+    function toggleMenu() {
+      const isOpen = !sidebar?.classList.contains('-translate-x-full');
+
+      if (isOpen) {
+        sidebar?.classList.add('-translate-x-full');
+        overlay?.classList.add('opacity-0', 'pointer-events-none');
+        overlay?.classList.remove('opacity-100', 'pointer-events-auto');
+      } else {
+        sidebar?.classList.remove('-translate-x-full');
+        overlay?.classList.remove('opacity-0', 'pointer-events-none');
+        overlay?.classList.add('opacity-100', 'pointer-events-auto');
+      }
+    }
+
+    menuBtn?.addEventListener('click', toggleMenu);
+    overlay?.addEventListener('click', toggleMenu);
+  </script>
+</body>
+</html>

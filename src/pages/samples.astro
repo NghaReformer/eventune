@@ -1,0 +1,404 @@
+---
+/**
+ * Samples Page
+ * Portfolio of sample songs with audio player
+ */
+
+import PublicLayout from '@/layouts/PublicLayout.astro';
+import Card from '@/components/ui/Card.astro';
+import Badge from '@/components/ui/Badge.astro';
+import { siteConfig } from '@/config';
+import {
+  getSamples,
+  getOccasions,
+  type Sample,
+  type Occasion,
+} from '@/services/config.service';
+
+// Fetch samples from config service
+let samples: Sample[] = [];
+let occasions: Occasion[] = [];
+
+try {
+  [samples, occasions] = await Promise.all([
+    getSamples(),
+    getOccasions(),
+  ]);
+} catch (error) {
+  console.error('Error fetching samples:', error);
+  // Fallback data for development
+  samples = [
+    {
+      id: '1',
+      title: 'Forever Starts Today',
+      occasion: 'wedding',
+      genre: 'Pop Ballad',
+      description: 'A heartfelt first dance song celebrating the beginning of a beautiful journey together.',
+      audio_url: '/samples/wedding-sample-1.mp3',
+      duration_seconds: 195,
+      is_featured: true,
+      is_active: true,
+      display_order: 1,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    {
+      id: '2',
+      title: 'Twenty-Five Years',
+      occasion: 'anniversary',
+      genre: 'Soul',
+      description: 'A silver anniversary celebration capturing 25 years of love, laughter, and memories.',
+      audio_url: '/samples/anniversary-sample-1.mp3',
+      duration_seconds: 210,
+      is_featured: true,
+      is_active: true,
+      display_order: 2,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    {
+      id: '3',
+      title: "Happy Birthday, Mom",
+      occasion: 'birthday',
+      genre: 'Acoustic',
+      description: "A touching tribute to a mother's love, created as a surprise 60th birthday gift.",
+      audio_url: '/samples/birthday-sample-1.mp3',
+      duration_seconds: 180,
+      is_featured: true,
+      is_active: true,
+      display_order: 3,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    {
+      id: '4',
+      title: 'The Next Chapter',
+      occasion: 'graduation',
+      genre: 'Inspirational Pop',
+      description: 'An uplifting graduation anthem celebrating achievements and the exciting road ahead.',
+      audio_url: '/samples/graduation-sample-1.mp3',
+      duration_seconds: 200,
+      is_featured: false,
+      is_active: true,
+      display_order: 4,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    {
+      id: '5',
+      title: 'Love Like Ours',
+      occasion: 'wedding',
+      genre: 'R&B',
+      description: 'A smooth R&B wedding song that tells the story of two souls finding each other.',
+      audio_url: '/samples/wedding-sample-2.mp3',
+      duration_seconds: 225,
+      is_featured: false,
+      is_active: true,
+      display_order: 5,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    {
+      id: '6',
+      title: 'Through All The Years',
+      occasion: 'anniversary',
+      genre: 'Country',
+      description: 'A country-styled anniversary song celebrating the ups and downs of a beautiful marriage.',
+      audio_url: '/samples/anniversary-sample-2.mp3',
+      duration_seconds: 190,
+      is_featured: false,
+      is_active: true,
+      display_order: 6,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+  ] as Sample[];
+
+  occasions = [
+    { id: '1', slug: 'wedding', name: 'Wedding', tagline: '', icon: 'heart', description: '', meta_title: '', meta_description: '', display_order: 1, is_active: true, created_at: '', updated_at: '' },
+    { id: '2', slug: 'birthday', name: 'Birthday', tagline: '', icon: 'cake', description: '', meta_title: '', meta_description: '', display_order: 2, is_active: true, created_at: '', updated_at: '' },
+    { id: '3', slug: 'anniversary', name: 'Anniversary', tagline: '', icon: 'rings', description: '', meta_title: '', meta_description: '', display_order: 3, is_active: true, created_at: '', updated_at: '' },
+    { id: '4', slug: 'graduation', name: 'Graduation', tagline: '', icon: 'cap', description: '', meta_title: '', meta_description: '', display_order: 4, is_active: true, created_at: '', updated_at: '' },
+  ] as Occasion[];
+}
+
+// Format duration to mm:ss
+const formatDuration = (seconds: number) => {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+};
+
+// Create occasion lookup
+const occasionMap = occasions.reduce((acc, occ) => {
+  acc[occ.slug] = occ.name;
+  return acc;
+}, {} as Record<string, string>);
+
+// Group samples by occasion for filtering
+const occasionFilters = ['all', ...occasions.map((o) => o.slug)];
+---
+
+<PublicLayout
+  title="Song Samples | Eventune Studios"
+  description="Listen to samples of our custom songs. Hear examples of wedding songs, birthday songs, anniversary songs, and more."
+>
+  <!-- Hero Section -->
+  <section class="py-16 md:py-24 bg-primary-cardBlack">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+      <h1 class="text-4xl md:text-5xl font-heading font-bold text-text-primary mb-4">
+        Listen to Our Work
+      </h1>
+      <p class="text-lg text-text-secondary max-w-2xl mx-auto">
+        Every song tells a unique story. Listen to samples of the custom songs we've created for our customers.
+      </p>
+    </div>
+  </section>
+
+  <!-- Filter & Samples -->
+  <section class="py-16 md:py-24">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <!-- Filter Tabs -->
+      <div class="flex flex-wrap justify-center gap-2 mb-12" id="sample-filters">
+        <button
+          type="button"
+          class="filter-btn px-4 py-2 text-sm font-medium rounded-full transition-colors active"
+          data-filter="all"
+        >
+          All Samples
+        </button>
+        {occasions.map((occasion) => (
+          <button
+            type="button"
+            class="filter-btn px-4 py-2 text-sm font-medium rounded-full transition-colors"
+            data-filter={occasion.slug}
+          >
+            {occasion.name}
+          </button>
+        ))}
+      </div>
+
+      <!-- Samples Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="samples-grid">
+        {samples.map((sample) => (
+          <Card
+            variant="elevated"
+            class="sample-card"
+            data-occasion={sample.occasion}
+          >
+            <!-- Badge -->
+            <div class="flex items-center justify-between mb-4">
+              <Badge variant="gold">{occasionMap[sample.occasion] || sample.occasion}</Badge>
+              <span class="text-sm text-text-muted">{sample.genre}</span>
+            </div>
+
+            <!-- Title & Description -->
+            <h3 class="text-xl font-heading font-semibold text-text-primary mb-2">
+              {sample.title}
+            </h3>
+            <p class="text-text-secondary text-sm mb-4 min-h-[40px]">
+              {sample.description}
+            </p>
+
+            <!-- Audio Player -->
+            <div class="audio-player bg-primary-hoverBlack rounded-lg p-4" data-audio-url={sample.audio_url}>
+              <div class="flex items-center gap-4">
+                <!-- Play/Pause Button -->
+                <button
+                  type="button"
+                  class="play-btn w-12 h-12 flex-shrink-0 rounded-full bg-accent-gold flex items-center justify-center hover:bg-accent-goldHover transition-colors"
+                  aria-label="Play"
+                >
+                  <svg class="play-icon w-5 h-5 text-primary-black ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                  <svg class="pause-icon w-5 h-5 text-primary-black hidden" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+                  </svg>
+                </button>
+
+                <!-- Progress & Time -->
+                <div class="flex-1">
+                  <div class="progress-bar h-2 bg-text-muted/30 rounded-full cursor-pointer overflow-hidden">
+                    <div class="progress-fill h-full bg-accent-gold w-0 transition-all"></div>
+                  </div>
+                  <div class="flex justify-between mt-1">
+                    <span class="current-time text-xs text-text-muted">0:00</span>
+                    <span class="total-time text-xs text-text-muted">{formatDuration(sample.duration_seconds)}</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Audio Element -->
+              <audio class="hidden" preload="metadata">
+                <source src={sample.audio_url} type="audio/mpeg" />
+              </audio>
+            </div>
+          </Card>
+        ))}
+      </div>
+
+      <!-- Empty State (for filtered results) -->
+      <div id="empty-state" class="hidden text-center py-12">
+        <p class="text-text-secondary text-lg">No samples found for this occasion.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA Section -->
+  <section class="py-16 md:py-24 bg-primary-cardBlack">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+      <h2 class="text-3xl md:text-4xl font-heading font-bold text-text-primary mb-4">
+        Ready for Your Own Custom Song?
+      </h2>
+      <p class="text-lg text-text-secondary mb-8">
+        Let us create something special for your celebration. Every song we make is unique to your story.
+      </p>
+      <div class="flex flex-col sm:flex-row gap-4 justify-center">
+        <a
+          href="/services"
+          class="inline-flex items-center justify-center px-8 py-4 bg-accent-gold text-primary-black text-lg font-medium rounded-lg hover:bg-accent-goldHover transition-colors"
+        >
+          View Packages
+        </a>
+        <a
+          href="/order/wedding"
+          class="inline-flex items-center justify-center px-8 py-4 border-2 border-text-muted text-text-primary text-lg font-medium rounded-lg hover:border-accent-gold hover:text-accent-gold transition-colors"
+        >
+          Start Your Order
+        </a>
+      </div>
+    </div>
+  </section>
+</PublicLayout>
+
+<script>
+  // Filter functionality
+  const filterBtns = document.querySelectorAll('.filter-btn');
+  const sampleCards = document.querySelectorAll('.sample-card');
+  const emptyState = document.getElementById('empty-state');
+
+  filterBtns.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const filter = btn.getAttribute('data-filter');
+
+      // Update active state
+      filterBtns.forEach((b) => b.classList.remove('active', 'bg-accent-gold', 'text-primary-black'));
+      btn.classList.add('active', 'bg-accent-gold', 'text-primary-black');
+
+      // Filter cards
+      let visibleCount = 0;
+      sampleCards.forEach((card) => {
+        const occasion = card.getAttribute('data-occasion');
+        if (filter === 'all' || occasion === filter) {
+          (card as HTMLElement).style.display = 'block';
+          visibleCount++;
+        } else {
+          (card as HTMLElement).style.display = 'none';
+        }
+      });
+
+      // Show/hide empty state
+      if (emptyState) {
+        emptyState.classList.toggle('hidden', visibleCount > 0);
+      }
+    });
+  });
+
+  // Initialize first button as active
+  const firstBtn = document.querySelector('.filter-btn.active');
+  if (firstBtn) {
+    firstBtn.classList.add('bg-accent-gold', 'text-primary-black');
+  }
+
+  // Audio player functionality
+  const audioPlayers = document.querySelectorAll('.audio-player');
+  let currentlyPlaying: HTMLAudioElement | null = null;
+  let currentlyPlayingPlayer: Element | null = null;
+
+  audioPlayers.forEach((player) => {
+    const audio = player.querySelector('audio') as HTMLAudioElement;
+    const playBtn = player.querySelector('.play-btn') as HTMLButtonElement;
+    const playIcon = player.querySelector('.play-icon') as SVGElement;
+    const pauseIcon = player.querySelector('.pause-icon') as SVGElement;
+    const progressBar = player.querySelector('.progress-bar') as HTMLElement;
+    const progressFill = player.querySelector('.progress-fill') as HTMLElement;
+    const currentTimeEl = player.querySelector('.current-time') as HTMLElement;
+
+    if (!audio || !playBtn) return;
+
+    // Format time helper
+    const formatTime = (seconds: number) => {
+      const mins = Math.floor(seconds / 60);
+      const secs = Math.floor(seconds % 60);
+      return `${mins}:${secs.toString().padStart(2, '0')}`;
+    };
+
+    // Play/Pause toggle
+    playBtn.addEventListener('click', () => {
+      if (audio.paused) {
+        // Pause any currently playing audio
+        if (currentlyPlaying && currentlyPlaying !== audio) {
+          currentlyPlaying.pause();
+          if (currentlyPlayingPlayer) {
+            const prevPlayIcon = currentlyPlayingPlayer.querySelector('.play-icon');
+            const prevPauseIcon = currentlyPlayingPlayer.querySelector('.pause-icon');
+            prevPlayIcon?.classList.remove('hidden');
+            prevPauseIcon?.classList.add('hidden');
+          }
+        }
+
+        audio.play();
+        currentlyPlaying = audio;
+        currentlyPlayingPlayer = player;
+        playIcon.classList.add('hidden');
+        pauseIcon.classList.remove('hidden');
+      } else {
+        audio.pause();
+        playIcon.classList.remove('hidden');
+        pauseIcon.classList.add('hidden');
+      }
+    });
+
+    // Update progress
+    audio.addEventListener('timeupdate', () => {
+      if (audio.duration) {
+        const percent = (audio.currentTime / audio.duration) * 100;
+        progressFill.style.width = `${percent}%`;
+        currentTimeEl.textContent = formatTime(audio.currentTime);
+      }
+    });
+
+    // Seek on progress bar click
+    progressBar.addEventListener('click', (e) => {
+      const rect = progressBar.getBoundingClientRect();
+      const percent = (e.clientX - rect.left) / rect.width;
+      audio.currentTime = percent * audio.duration;
+    });
+
+    // Reset on end
+    audio.addEventListener('ended', () => {
+      playIcon.classList.remove('hidden');
+      pauseIcon.classList.add('hidden');
+      progressFill.style.width = '0%';
+      currentTimeEl.textContent = '0:00';
+      currentlyPlaying = null;
+      currentlyPlayingPlayer = null;
+    });
+  });
+</script>
+
+<style>
+  .filter-btn {
+    color: var(--color-text-secondary);
+    border: 1px solid transparent;
+  }
+  .filter-btn:hover:not(.active) {
+    color: var(--color-text-primary);
+    border-color: var(--color-text-muted);
+  }
+  .filter-btn.active {
+    background-color: var(--color-accent-gold);
+    color: var(--color-primary-black);
+  }
+</style>

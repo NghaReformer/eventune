@@ -1,0 +1,661 @@
+---
+/**
+ * Admin Customer Management
+ * View and manage customer accounts
+ *
+ * Security: Admin role with customers:view permission required
+ */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { getCustomers } from '../../../services/admin.service';
+import { hasPermission } from '../../../lib/auth/admin-session';
+import type { AdminSessionData } from '../../../lib/auth/admin-session';
+
+// Get admin session from layout
+const adminSession = Astro.locals.adminSession as AdminSessionData;
+const { permissions } = adminSession;
+
+// Verify customers permission
+if (!hasPermission(permissions, 'customers:view')) {
+  return Astro.redirect('/admin?error=permission_denied');
+}
+
+// Parse query parameters
+const url = new URL(Astro.request.url);
+const search = url.searchParams.get('search') || '';
+const hasOrders = url.searchParams.get('has_orders');
+const page = parseInt(url.searchParams.get('page') || '1');
+const sortBy = url.searchParams.get('sort_by') as 'created_at' | 'full_name' | 'order_count' | 'total_spent' || 'created_at';
+const sortOrder = url.searchParams.get('sort_order') as 'asc' | 'desc' || 'desc';
+
+// Fetch customers
+const { customers, total, limit } = await getCustomers({
+  search,
+  has_orders: hasOrders === 'true' ? true : hasOrders === 'false' ? false : undefined,
+  page,
+  sort_by: sortBy,
+  sort_order: sortOrder,
+});
+
+const totalPages = Math.ceil(total / limit);
+
+function formatDate(date: string) {
+  return new Date(date).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function formatRelativeDate(date: string) {
+  const now = new Date();
+  const then = new Date(date);
+  const diffMs = now.getTime() - then.getTime();
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) return `${diffDays}d ago`;
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
+  if (diffDays < 365) return `${Math.floor(diffDays / 30)}mo ago`;
+  return `${Math.floor(diffDays / 365)}y ago`;
+}
+
+function formatCurrency(usd: number, xaf: number): string {
+  const parts = [];
+  if (usd > 0) parts.push(`$${usd.toLocaleString()}`);
+  if (xaf > 0) parts.push(`${xaf.toLocaleString()} XAF`);
+  return parts.length > 0 ? parts.join(' + ') : '$0';
+}
+
+function buildSortUrl(field: string): string {
+  const newUrl = new URL(url);
+  if (sortBy === field) {
+    newUrl.searchParams.set('sort_order', sortOrder === 'asc' ? 'desc' : 'asc');
+  } else {
+    newUrl.searchParams.set('sort_by', field);
+    newUrl.searchParams.set('sort_order', 'desc');
+  }
+  newUrl.searchParams.set('page', '1');
+  return newUrl.pathname + newUrl.search;
+}
+
+function getSortIcon(field: string): string {
+  if (sortBy !== field) return 'neutral';
+  return sortOrder === 'asc' ? 'asc' : 'desc';
+}
+---
+
+<AdminLayout title="Customers" activeNav="customers">
+  <!-- Page Header -->
+  <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-8">
+    <div>
+      <h2 class="font-display text-2xl text-admin-cream">Customer Management</h2>
+      <p class="text-admin-cream/50 mt-1">{total.toLocaleString()} customers total</p>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="filters-bar">
+    <form method="GET" class="flex flex-wrap items-center gap-4">
+      <!-- Search -->
+      <div class="search-wrapper">
+        <svg class="search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+        <input
+          type="text"
+          name="search"
+          value={search}
+          placeholder="Search by name or email..."
+          class="search-input"
+        />
+      </div>
+
+      <!-- Order Status Filter -->
+      <div class="filter-group">
+        <select name="has_orders" class="filter-select">
+          <option value="">All Customers</option>
+          <option value="true" selected={hasOrders === 'true'}>With Orders</option>
+          <option value="false" selected={hasOrders === 'false'}>No Orders</option>
+        </select>
+      </div>
+
+      <button type="submit" class="filter-btn">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+        </svg>
+        Filter
+      </button>
+
+      {(search || hasOrders) && (
+        <a href="/admin/customers" class="clear-btn">
+          Clear Filters
+        </a>
+      )}
+    </form>
+  </div>
+
+  <!-- Customers Table -->
+  <div class="table-card">
+    {customers.length === 0 ? (
+      <div class="empty-state">
+        <div class="empty-icon">
+          <svg class="w-12 h-12 text-gold/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+          </svg>
+        </div>
+        <p class="text-admin-cream/50">No customers found</p>
+        {search && <p class="text-admin-cream/30 text-sm mt-1">Try adjusting your search</p>}
+      </div>
+    ) : (
+      <div class="table-wrapper">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>
+                <a href={buildSortUrl('full_name')} class="sort-header">
+                  Customer
+                  <span class:list={['sort-icon', getSortIcon('full_name')]}></span>
+                </a>
+              </th>
+              <th>
+                <a href={buildSortUrl('order_count')} class="sort-header">
+                  Orders
+                  <span class:list={['sort-icon', getSortIcon('order_count')]}></span>
+                </a>
+              </th>
+              <th>
+                <a href={buildSortUrl('total_spent')} class="sort-header">
+                  Total Spent
+                  <span class:list={['sort-icon', getSortIcon('total_spent')]}></span>
+                </a>
+              </th>
+              <th>Last Order</th>
+              <th>
+                <a href={buildSortUrl('created_at')} class="sort-header">
+                  Joined
+                  <span class:list={['sort-icon', getSortIcon('created_at')]}></span>
+                </a>
+              </th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {customers.map((customer) => (
+              <tr class="data-row">
+                <td>
+                  <div class="customer-cell">
+                    <div class="customer-avatar">
+                      <span>{(customer.full_name || customer.email).charAt(0).toUpperCase()}</span>
+                    </div>
+                    <div class="customer-info">
+                      <span class="customer-name">{customer.full_name || 'No Name'}</span>
+                      <span class="customer-email">{customer.email}</span>
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  <span class:list={['order-count', customer.order_count > 0 ? 'has-orders' : 'no-orders']}>
+                    {customer.order_count}
+                  </span>
+                </td>
+                <td>
+                  <span class="total-spent">
+                    {formatCurrency(customer.total_spent_usd, customer.total_spent_xaf)}
+                  </span>
+                </td>
+                <td>
+                  <span class="last-order">
+                    {customer.last_order_date
+                      ? formatRelativeDate(customer.last_order_date)
+                      : <span class="text-admin-cream/30">Never</span>
+                    }
+                  </span>
+                </td>
+                <td>
+                  <span class="join-date">{formatDate(customer.created_at)}</span>
+                </td>
+                <td>
+                  <a href={`/admin/customers/${customer.id}`} class="view-btn">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </a>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )}
+
+    <!-- Pagination -->
+    {totalPages > 1 && (
+      <div class="pagination">
+        <div class="pagination-info">
+          Showing {((page - 1) * limit) + 1} - {Math.min(page * limit, total)} of {total}
+        </div>
+        <div class="pagination-controls">
+          {page > 1 && (
+            <a href={`?page=${page - 1}&search=${search}&has_orders=${hasOrders || ''}&sort_by=${sortBy}&sort_order=${sortOrder}`} class="page-btn">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+              </svg>
+              Previous
+            </a>
+          )}
+
+          <div class="page-numbers">
+            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+              let pageNum;
+              if (totalPages <= 5) {
+                pageNum = i + 1;
+              } else if (page <= 3) {
+                pageNum = i + 1;
+              } else if (page >= totalPages - 2) {
+                pageNum = totalPages - 4 + i;
+              } else {
+                pageNum = page - 2 + i;
+              }
+              return (
+                <a
+                  href={`?page=${pageNum}&search=${search}&has_orders=${hasOrders || ''}&sort_by=${sortBy}&sort_order=${sortOrder}`}
+                  class:list={['page-number', page === pageNum && 'active']}
+                >
+                  {pageNum}
+                </a>
+              );
+            })}
+          </div>
+
+          {page < totalPages && (
+            <a href={`?page=${page + 1}&search=${search}&has_orders=${hasOrders || ''}&sort_by=${sortBy}&sort_order=${sortOrder}`} class="page-btn">
+              Next
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+              </svg>
+            </a>
+          )}
+        </div>
+      </div>
+    )}
+  </div>
+</AdminLayout>
+
+<style>
+  :root {
+    --admin-black: #0A0A0A;
+    --admin-card: #111111;
+    --admin-cream: #F5F5F5;
+    --gold: #D4AF37;
+  }
+
+  .font-display { font-family: 'Playfair Display', serif; }
+
+  /* Filters Bar */
+  .filters-bar {
+    background: var(--admin-card);
+    border: 1px solid rgba(212, 175, 55, 0.08);
+    border-radius: 1rem;
+    padding: 1rem 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .search-wrapper {
+    position: relative;
+    flex: 1;
+    max-width: 300px;
+  }
+
+  .search-icon {
+    position: absolute;
+    left: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 1.25rem;
+    height: 1.25rem;
+    color: rgba(245, 245, 245, 0.3);
+  }
+
+  .search-input {
+    width: 100%;
+    padding: 0.75rem 1rem 0.75rem 3rem;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(212, 175, 55, 0.1);
+    border-radius: 0.5rem;
+    color: var(--admin-cream);
+    font-size: 0.875rem;
+    transition: all 0.2s ease;
+  }
+
+  .search-input:focus {
+    outline: none;
+    border-color: rgba(212, 175, 55, 0.3);
+    background: rgba(0, 0, 0, 0.4);
+  }
+
+  .search-input::placeholder {
+    color: rgba(245, 245, 245, 0.3);
+  }
+
+  .filter-select {
+    padding: 0.75rem 2rem 0.75rem 1rem;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(212, 175, 55, 0.1);
+    border-radius: 0.5rem;
+    color: var(--admin-cream);
+    font-size: 0.875rem;
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23D4AF37'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    background-size: 1rem;
+  }
+
+  .filter-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.25rem;
+    background: rgba(212, 175, 55, 0.1);
+    border: 1px solid rgba(212, 175, 55, 0.2);
+    border-radius: 0.5rem;
+    color: var(--gold);
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+  }
+
+  .filter-btn:hover {
+    background: rgba(212, 175, 55, 0.15);
+    border-color: rgba(212, 175, 55, 0.3);
+  }
+
+  .clear-btn {
+    padding: 0.75rem 1rem;
+    color: rgba(245, 245, 245, 0.5);
+    font-size: 0.875rem;
+    transition: color 0.2s ease;
+  }
+
+  .clear-btn:hover {
+    color: var(--admin-cream);
+  }
+
+  /* Table Card */
+  .table-card {
+    background: var(--admin-card);
+    border: 1px solid rgba(212, 175, 55, 0.08);
+    border-radius: 1rem;
+    overflow: hidden;
+  }
+
+  .table-wrapper {
+    overflow-x: auto;
+  }
+
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .data-table th {
+    padding: 1rem;
+    text-align: left;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: rgba(245, 245, 245, 0.4);
+    background: rgba(0, 0, 0, 0.3);
+    border-bottom: 1px solid rgba(212, 175, 55, 0.08);
+  }
+
+  .data-table th:first-child {
+    padding-left: 1.5rem;
+  }
+
+  .sort-header {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: inherit;
+    transition: color 0.2s ease;
+  }
+
+  .sort-header:hover {
+    color: var(--gold);
+  }
+
+  .sort-icon {
+    width: 0.75rem;
+    height: 0.75rem;
+    opacity: 0.3;
+  }
+
+  .sort-icon.asc::after,
+  .sort-icon.desc::after {
+    content: '';
+    display: block;
+    width: 0;
+    height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+  }
+
+  .sort-icon.asc::after {
+    border-bottom: 6px solid var(--gold);
+  }
+
+  .sort-icon.desc::after {
+    border-top: 6px solid var(--gold);
+  }
+
+  .sort-icon.asc,
+  .sort-icon.desc {
+    opacity: 1;
+  }
+
+  .data-row {
+    border-bottom: 1px solid rgba(212, 175, 55, 0.05);
+    transition: background 0.2s ease;
+  }
+
+  .data-row:hover {
+    background: rgba(212, 175, 55, 0.03);
+  }
+
+  .data-row td {
+    padding: 1rem;
+  }
+
+  .data-row td:first-child {
+    padding-left: 1.5rem;
+  }
+
+  /* Customer Cell */
+  .customer-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.875rem;
+  }
+
+  .customer-avatar {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 9999px;
+    background: linear-gradient(135deg, rgba(212, 175, 55, 0.2) 0%, rgba(212, 175, 55, 0.1) 100%);
+    border: 1px solid rgba(212, 175, 55, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--gold);
+    font-weight: 600;
+    font-family: 'Playfair Display', serif;
+  }
+
+  .customer-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+
+  .customer-name {
+    font-weight: 500;
+    color: var(--admin-cream);
+    font-size: 0.875rem;
+  }
+
+  .customer-email {
+    font-size: 0.75rem;
+    color: rgba(245, 245, 245, 0.4);
+  }
+
+  /* Order Count */
+  .order-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 9999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+
+  .order-count.has-orders {
+    background: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+  }
+
+  .order-count.no-orders {
+    background: rgba(245, 245, 245, 0.05);
+    color: rgba(245, 245, 245, 0.3);
+  }
+
+  /* Total Spent */
+  .total-spent {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #10b981;
+  }
+
+  /* Last Order & Join Date */
+  .last-order,
+  .join-date {
+    font-size: 0.8rem;
+    color: rgba(245, 245, 245, 0.6);
+  }
+
+  /* View Button */
+  .view-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 0.5rem;
+    color: rgba(245, 245, 245, 0.4);
+    transition: all 0.2s ease;
+  }
+
+  .view-btn:hover {
+    background: rgba(212, 175, 55, 0.1);
+    color: var(--gold);
+  }
+
+  /* Empty State */
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4rem;
+    text-align: center;
+  }
+
+  .empty-icon {
+    margin-bottom: 1rem;
+  }
+
+  /* Pagination */
+  .pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid rgba(212, 175, 55, 0.08);
+  }
+
+  .pagination-info {
+    font-size: 0.8rem;
+    color: rgba(245, 245, 245, 0.5);
+  }
+
+  .pagination-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .page-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.375rem;
+    font-size: 0.8rem;
+    color: rgba(245, 245, 245, 0.6);
+    transition: all 0.2s ease;
+  }
+
+  .page-btn:hover {
+    background: rgba(212, 175, 55, 0.1);
+    color: var(--gold);
+  }
+
+  .page-numbers {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .page-number {
+    width: 2rem;
+    height: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.375rem;
+    font-size: 0.8rem;
+    color: rgba(245, 245, 245, 0.6);
+    transition: all 0.2s ease;
+  }
+
+  .page-number:hover {
+    background: rgba(212, 175, 55, 0.1);
+    color: var(--gold);
+  }
+
+  .page-number.active {
+    background: var(--gold);
+    color: var(--admin-black);
+    font-weight: 600;
+  }
+
+  @media (max-width: 768px) {
+    .filters-bar form {
+      flex-direction: column;
+    }
+
+    .search-wrapper {
+      max-width: 100%;
+    }
+
+    .pagination {
+      flex-direction: column;
+      gap: 1rem;
+    }
+  }
+</style>

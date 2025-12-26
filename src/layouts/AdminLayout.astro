@@ -1,0 +1,560 @@
+---
+/**
+ * Admin Layout
+ * Luxury command center aesthetic - recording studio control room meets premium brand management
+ *
+ * Security: Role-based access, CSRF protection, audit logging
+ */
+import { getAdminSession, getRoleDisplayName, getRoleBadgeClasses, hasPermission } from '../lib/auth/admin-session';
+import { setCSRFToken, getFirstName } from '../lib/auth/session';
+
+interface Props {
+  title: string;
+  activeNav?: 'dashboard' | 'orders' | 'customers' | 'analytics' | 'content' | 'settings';
+}
+
+const { title, activeNav = 'dashboard' } = Astro.props;
+
+// Validate admin session
+const adminResult = await getAdminSession(Astro.cookies);
+
+if (!adminResult.success) {
+  const currentPath = Astro.url.pathname;
+  return Astro.redirect(`/auth/login?redirect=${encodeURIComponent(currentPath)}&error=admin_required`);
+}
+
+const { user, profile, adminRole, permissions } = adminResult.data;
+const firstName = getFirstName(profile);
+const roleDisplay = getRoleDisplayName(adminRole);
+const roleBadgeClasses = getRoleBadgeClasses(adminRole);
+
+// Set CSRF token for forms
+const csrfToken = setCSRFToken(Astro.cookies);
+
+// Make session available to child pages
+Astro.locals.adminSession = adminResult.data;
+Astro.locals.csrfToken = csrfToken;
+
+// Navigation items with permission checks
+const navItems = [
+  {
+    href: '/admin',
+    label: 'Dashboard',
+    icon: 'dashboard',
+    active: activeNav === 'dashboard',
+    permission: 'dashboard:view',
+  },
+  {
+    href: '/admin/orders',
+    label: 'Orders',
+    icon: 'orders',
+    active: activeNav === 'orders',
+    permission: 'orders:view',
+    badge: null, // Could show pending count
+  },
+  {
+    href: '/admin/customers',
+    label: 'Customers',
+    icon: 'customers',
+    active: activeNav === 'customers',
+    permission: 'customers:view',
+  },
+  {
+    href: '/admin/analytics',
+    label: 'Analytics',
+    icon: 'analytics',
+    active: activeNav === 'analytics',
+    permission: 'analytics:view',
+  },
+  {
+    href: '/admin/content',
+    label: 'Content',
+    icon: 'content',
+    active: activeNav === 'content',
+    permission: 'content:view',
+  },
+  {
+    href: '/admin/settings',
+    label: 'Settings',
+    icon: 'settings',
+    active: activeNav === 'settings',
+    permission: 'settings:view',
+  },
+].filter(item => hasPermission(permissions, item.permission));
+---
+
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>{title} | Admin - Eventune Studios</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+</head>
+<body class="admin-body">
+  <!-- Subtle grid pattern overlay -->
+  <div class="fixed inset-0 pointer-events-none opacity-[0.02]" style="background-image: url('data:image/svg+xml,%3Csvg width=&quot;60&quot; height=&quot;60&quot; viewBox=&quot;0 0 60 60&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;%3E%3Cg fill=&quot;none&quot; fill-rule=&quot;evenodd&quot;%3E%3Cg fill=&quot;%23D4AF37&quot; fill-opacity=&quot;1&quot;%3E%3Cpath d=&quot;M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z&quot;/%3E%3C/g%3E%3C/g%3E%3C/svg%3E');"></div>
+
+  <!-- Mobile Header -->
+  <header class="lg:hidden fixed top-0 left-0 right-0 z-50 admin-mobile-header">
+    <div class="flex items-center justify-between px-4 h-16">
+      <a href="/admin" class="flex items-center gap-2">
+        <div class="admin-logo-icon">
+          <span class="text-admin-black font-bold text-sm">E</span>
+        </div>
+        <div class="flex flex-col">
+          <span class="font-display text-lg text-gold leading-none">Eventune</span>
+          <span class="text-[9px] text-gold/50 tracking-[0.15em] uppercase">Admin</span>
+        </div>
+      </a>
+      <div class="flex items-center gap-2">
+        <span class={`role-badge ${roleBadgeClasses}`}>{roleDisplay}</span>
+        <button
+          id="mobile-menu-btn"
+          class="p-2 text-admin-cream/70 hover:text-gold transition-colors"
+          aria-label="Toggle menu"
+        >
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Mobile Sidebar Overlay -->
+  <div id="mobile-overlay" class="lg:hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-40 opacity-0 pointer-events-none transition-opacity duration-300"></div>
+
+  <!-- Sidebar -->
+  <aside id="sidebar" class="admin-sidebar">
+    <!-- Logo Section -->
+    <div class="h-20 flex items-center px-6 border-b border-gold/10">
+      <a href="/admin" class="flex items-center gap-3 group">
+        <div class="admin-logo-icon group-hover:shadow-gold/40 transition-shadow">
+          <span class="text-admin-black font-bold text-lg">E</span>
+        </div>
+        <div>
+          <span class="font-display text-xl text-gold">Eventune</span>
+          <span class="block text-[10px] text-admin-cream/40 tracking-[0.2em] uppercase">Admin Console</span>
+        </div>
+      </a>
+    </div>
+
+    <!-- Admin Profile -->
+    <div class="px-6 py-5 border-b border-gold/5">
+      <div class="flex items-center gap-3">
+        <div class="admin-avatar">
+          <span class="text-gold font-display text-lg">{firstName.charAt(0).toUpperCase()}</span>
+          <!-- Online indicator -->
+          <span class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-400 rounded-full border-2 border-admin-card"></span>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="font-medium text-admin-cream truncate">{firstName}</p>
+          <span class={`role-badge-sm ${roleBadgeClasses}`}>{roleDisplay}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="flex-1 px-3 py-6 overflow-y-auto">
+      <div class="mb-2 px-4">
+        <span class="text-[10px] font-semibold text-admin-cream/30 uppercase tracking-wider">Navigation</span>
+      </div>
+      <ul class="space-y-1">
+        {navItems.map((item) => (
+          <li>
+            <a
+              href={item.href}
+              class:list={[
+                "admin-nav-item",
+                item.active && "active"
+              ]}
+            >
+              {item.icon === 'dashboard' && (
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM14 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+                </svg>
+              )}
+              {item.icon === 'orders' && (
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                </svg>
+              )}
+              {item.icon === 'customers' && (
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+              )}
+              {item.icon === 'analytics' && (
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+              )}
+              {item.icon === 'content' && (
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+              )}
+              {item.icon === 'settings' && (
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              )}
+              <span class="font-medium">{item.label}</span>
+              {item.active && (
+                <div class="ml-auto flex items-center gap-2">
+                  <div class="w-1.5 h-1.5 rounded-full bg-gold animate-pulse"></div>
+                </div>
+              )}
+            </a>
+          </li>
+        ))}
+      </ul>
+
+      <!-- Divider -->
+      <div class="my-6 mx-4 border-t border-gold/10"></div>
+
+      <!-- Quick Links -->
+      <div class="mb-2 px-4">
+        <span class="text-[10px] font-semibold text-admin-cream/30 uppercase tracking-wider">Quick Links</span>
+      </div>
+      <ul class="space-y-1">
+        <li>
+          <a href="/" target="_blank" class="admin-nav-item-secondary">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+            <span>View Website</span>
+          </a>
+        </li>
+        <li>
+          <a href="/auth/logout" class="admin-nav-item-secondary text-red-400/70 hover:text-red-400 hover:bg-red-500/10">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            <span>Sign Out</span>
+          </a>
+        </li>
+      </ul>
+    </nav>
+
+    <!-- VU Meter Decoration -->
+    <div class="px-6 py-4 border-t border-gold/5">
+      <div class="flex items-end justify-center gap-1 h-8">
+        {[...Array(16)].map((_, i) => (
+          <div
+            class="vu-bar"
+            style={`animation-delay: ${i * 0.08}s;`}
+          ></div>
+        ))}
+      </div>
+      <p class="text-center text-[10px] text-admin-cream/20 mt-2 font-mono">EVENTUNE ADMIN v1.0</p>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="lg:pl-72 min-h-screen">
+    <div class="pt-20 lg:pt-0">
+      <!-- Page Header -->
+      <header class="admin-page-header">
+        <div class="flex items-center justify-between">
+          <div>
+            <h1 class="font-display text-2xl lg:text-3xl text-admin-cream">{title}</h1>
+            <div class="flex items-center gap-2 mt-1">
+              <span class="text-admin-cream/40 text-sm">Admin Console</span>
+              <span class="text-gold/30">/</span>
+              <span class="text-gold/70 text-sm">{title}</span>
+            </div>
+          </div>
+
+          <!-- Header Actions -->
+          <div class="hidden lg:flex items-center gap-4">
+            <!-- Notifications -->
+            <button class="admin-header-btn group">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+              </svg>
+              <span class="notification-dot"></span>
+            </button>
+
+            <!-- Profile Dropdown -->
+            <div class="flex items-center gap-3 pl-4 border-l border-gold/10">
+              <div class="text-right">
+                <p class="text-sm font-medium text-admin-cream">{firstName}</p>
+                <p class="text-xs text-admin-cream/50">{user.email}</p>
+              </div>
+              <div class="admin-avatar-sm">
+                <span class="text-gold font-display">{firstName.charAt(0)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- Page Content -->
+      <div class="p-6 lg:p-8">
+        <slot />
+      </div>
+    </div>
+  </main>
+
+  <style>
+    :root {
+      --admin-black: #0A0A0A;
+      --admin-card: #111111;
+      --admin-card-hover: #161616;
+      --admin-cream: #F5F5F5;
+      --gold: #D4AF37;
+      --gold-dark: #B8962E;
+      --gold-glow: rgba(212, 175, 55, 0.15);
+    }
+
+    .admin-body {
+      background-color: var(--admin-black);
+      color: var(--admin-cream);
+      font-family: 'Inter', sans-serif;
+      min-height: 100vh;
+    }
+
+    .font-display { font-family: 'Playfair Display', serif; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+
+    /* Sidebar */
+    .admin-sidebar {
+      position: fixed;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 18rem;
+      background: linear-gradient(180deg, var(--admin-card) 0%, rgba(17, 17, 17, 0.98) 100%);
+      border-right: 1px solid rgba(212, 175, 55, 0.08);
+      z-index: 50;
+      display: flex;
+      flex-direction: column;
+      transform: translateX(-100%);
+      transition: transform 0.3s ease;
+    }
+
+    @media (min-width: 1024px) {
+      .admin-sidebar {
+        transform: translateX(0);
+      }
+    }
+
+    .admin-sidebar.open {
+      transform: translateX(0);
+    }
+
+    /* Logo */
+    .admin-logo-icon {
+      width: 2.5rem;
+      height: 2.5rem;
+      border-radius: 9999px;
+      background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dark) 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 20px var(--gold-glow);
+    }
+
+    /* Avatar */
+    .admin-avatar {
+      position: relative;
+      width: 3rem;
+      height: 3rem;
+      border-radius: 9999px;
+      background: linear-gradient(135deg, rgba(212, 175, 55, 0.15) 0%, rgba(212, 175, 55, 0.05) 100%);
+      border: 1px solid rgba(212, 175, 55, 0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .admin-avatar-sm {
+      width: 2.25rem;
+      height: 2.25rem;
+      border-radius: 9999px;
+      background: linear-gradient(135deg, rgba(212, 175, 55, 0.2) 0%, rgba(212, 175, 55, 0.1) 100%);
+      border: 1px solid rgba(212, 175, 55, 0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Role Badges */
+    .role-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.25rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.65rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border: 1px solid;
+    }
+
+    .role-badge-sm {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.125rem 0.5rem;
+      border-radius: 9999px;
+      font-size: 0.6rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border: 1px solid;
+    }
+
+    /* Navigation */
+    .admin-nav-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.75rem 1rem;
+      margin: 0 0.25rem;
+      border-radius: 0.5rem;
+      color: rgba(245, 245, 245, 0.5);
+      transition: all 0.2s ease;
+      border-left: 2px solid transparent;
+    }
+
+    .admin-nav-item:hover {
+      background: rgba(212, 175, 55, 0.05);
+      color: var(--admin-cream);
+    }
+
+    .admin-nav-item.active {
+      background: rgba(212, 175, 55, 0.1);
+      color: var(--gold);
+      border-left-color: var(--gold);
+    }
+
+    .admin-nav-item-secondary {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      margin: 0 0.25rem;
+      border-radius: 0.5rem;
+      color: rgba(245, 245, 245, 0.4);
+      font-size: 0.875rem;
+      transition: all 0.2s ease;
+    }
+
+    .admin-nav-item-secondary:hover {
+      background: rgba(212, 175, 55, 0.05);
+      color: var(--gold);
+    }
+
+    /* Mobile Header */
+    .admin-mobile-header {
+      background: rgba(17, 17, 17, 0.95);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(212, 175, 55, 0.1);
+    }
+
+    /* Page Header */
+    .admin-page-header {
+      padding: 1.5rem 1.5rem;
+      border-bottom: 1px solid rgba(212, 175, 55, 0.08);
+      background: linear-gradient(90deg, rgba(17, 17, 17, 0.8) 0%, transparent 100%);
+    }
+
+    @media (min-width: 1024px) {
+      .admin-page-header {
+        padding: 2rem 2rem;
+      }
+    }
+
+    /* Header Button */
+    .admin-header-btn {
+      position: relative;
+      padding: 0.5rem;
+      border-radius: 0.5rem;
+      color: rgba(245, 245, 245, 0.5);
+      transition: all 0.2s ease;
+    }
+
+    .admin-header-btn:hover {
+      background: rgba(212, 175, 55, 0.1);
+      color: var(--gold);
+    }
+
+    .notification-dot {
+      position: absolute;
+      top: 0.25rem;
+      right: 0.25rem;
+      width: 0.5rem;
+      height: 0.5rem;
+      background: #ef4444;
+      border-radius: 9999px;
+      border: 2px solid var(--admin-card);
+    }
+
+    /* VU Meter Animation */
+    .vu-bar {
+      width: 0.25rem;
+      background: linear-gradient(to top, var(--gold) 0%, rgba(212, 175, 55, 0.3) 100%);
+      border-radius: 2px;
+      animation: vu-meter 1.2s ease-in-out infinite;
+      transform-origin: bottom;
+      opacity: 0.4;
+    }
+
+    @keyframes vu-meter {
+      0%, 100% { height: 0.5rem; opacity: 0.3; }
+      50% { height: 1.5rem; opacity: 0.6; }
+    }
+
+    /* Custom scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: var(--admin-black);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(212, 175, 55, 0.3);
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--gold);
+    }
+
+    /* Utility Classes */
+    .text-gold { color: var(--gold); }
+    .text-admin-cream { color: var(--admin-cream); }
+    .text-admin-black { color: var(--admin-black); }
+    .bg-gold { background-color: var(--gold); }
+    .bg-admin-card { background-color: var(--admin-card); }
+    .border-gold { border-color: var(--gold); }
+  </style>
+
+  <script>
+    // Mobile menu toggle
+    const menuBtn = document.getElementById('mobile-menu-btn');
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('mobile-overlay');
+
+    function toggleMenu() {
+      sidebar?.classList.toggle('open');
+      if (sidebar?.classList.contains('open')) {
+        overlay?.classList.remove('opacity-0', 'pointer-events-none');
+        overlay?.classList.add('opacity-100', 'pointer-events-auto');
+      } else {
+        overlay?.classList.add('opacity-0', 'pointer-events-none');
+        overlay?.classList.remove('opacity-100', 'pointer-events-auto');
+      }
+    }
+
+    menuBtn?.addEventListener('click', toggleMenu);
+    overlay?.addEventListener('click', toggleMenu);
+  </script>
+</body>
+</html>

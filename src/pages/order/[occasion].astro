@@ -1,0 +1,477 @@
+---
+/**
+ * Order Page
+ * Dynamic order page for different occasions
+ */
+
+import PublicLayout from '@/layouts/PublicLayout.astro';
+import Card from '@/components/ui/Card.astro';
+import Badge from '@/components/ui/Badge.astro';
+import Button from '@/components/ui/Button.astro';
+import { siteConfig } from '@/config';
+import {
+  getOccasionBySlug,
+  getOccasions,
+  getPackages,
+  type Occasion,
+  type Package,
+} from '@/services/config.service';
+
+// Get dynamic route parameter
+const { occasion: occasionSlug } = Astro.params;
+
+// Get preselected package from URL query
+const urlParams = new URL(Astro.request.url).searchParams;
+const preselectedPackage = urlParams.get('package') || 'classic';
+
+// Fetch data
+let occasion: Occasion | null = null;
+let packages: Package[] = [];
+let allOccasions: Occasion[] = [];
+
+try {
+  [occasion, packages, allOccasions] = await Promise.all([
+    getOccasionBySlug(occasionSlug || 'wedding'),
+    getPackages(),
+    getOccasions(),
+  ]);
+} catch (error) {
+  console.error('Error fetching order data:', error);
+  // Fallback data for development
+  occasion = {
+    id: '1',
+    slug: occasionSlug || 'wedding',
+    name: occasionSlug ? occasionSlug.charAt(0).toUpperCase() + occasionSlug.slice(1) : 'Wedding',
+    description: 'Celebrate your special day with a custom song',
+    tagline: 'The First Dance They\'ll Never Forget',
+    icon: 'heart',
+    meta_title: 'Custom Wedding Songs',
+    meta_description: 'Create a personalized song for your special day',
+    display_order: 1,
+    is_active: true,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  } as Occasion;
+
+  packages = [
+    {
+      id: '1',
+      slug: 'express',
+      name: 'Express',
+      description: 'Quick turnaround for time-sensitive celebrations',
+      price_usd: 149,
+      price_xaf: 75000,
+      song_length_min: 60,
+      song_length_max: 90,
+      includes_discovery_call: false,
+      revision_count: 1,
+      includes_instrumental: false,
+      includes_full_rights: false,
+      delivery_days_min: 5,
+      delivery_days_max: 7,
+      display_order: 1,
+      is_popular: false,
+      is_active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    {
+      id: '2',
+      slug: 'classic',
+      name: 'Classic',
+      description: 'Our most popular package for special moments',
+      price_usd: 299,
+      price_xaf: 150000,
+      song_length_min: 120,
+      song_length_max: 180,
+      includes_discovery_call: true,
+      revision_count: 2,
+      includes_instrumental: false,
+      includes_full_rights: false,
+      delivery_days_min: 7,
+      delivery_days_max: 10,
+      display_order: 2,
+      is_popular: true,
+      is_active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    {
+      id: '3',
+      slug: 'signature',
+      name: 'Signature',
+      description: 'Premium production with instrumental track',
+      price_usd: 499,
+      price_xaf: 250000,
+      song_length_min: 180,
+      song_length_max: 240,
+      includes_discovery_call: true,
+      revision_count: 3,
+      includes_instrumental: true,
+      includes_full_rights: false,
+      delivery_days_min: 10,
+      delivery_days_max: 14,
+      display_order: 3,
+      is_popular: false,
+      is_active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    {
+      id: '4',
+      slug: 'legacy',
+      name: 'Legacy',
+      description: 'Full rights ownership for lasting memories',
+      price_usd: 799,
+      price_xaf: 400000,
+      song_length_min: 240,
+      song_length_max: 300,
+      includes_discovery_call: true,
+      revision_count: 5,
+      includes_instrumental: true,
+      includes_full_rights: true,
+      delivery_days_min: 14,
+      delivery_days_max: 21,
+      display_order: 4,
+      is_popular: false,
+      is_active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+  ] as Package[];
+
+  allOccasions = [
+    { id: '1', slug: 'wedding', name: 'Wedding', tagline: '', icon: 'heart', description: '', meta_title: '', meta_description: '', display_order: 1, is_active: true, created_at: '', updated_at: '' },
+    { id: '2', slug: 'birthday', name: 'Birthday', tagline: '', icon: 'cake', description: '', meta_title: '', meta_description: '', display_order: 2, is_active: true, created_at: '', updated_at: '' },
+    { id: '3', slug: 'anniversary', name: 'Anniversary', tagline: '', icon: 'rings', description: '', meta_title: '', meta_description: '', display_order: 3, is_active: true, created_at: '', updated_at: '' },
+    { id: '4', slug: 'graduation', name: 'Graduation', tagline: '', icon: 'cap', description: '', meta_title: '', meta_description: '', display_order: 4, is_active: true, created_at: '', updated_at: '' },
+  ] as Occasion[];
+}
+
+// Format delivery time
+const formatDelivery = (min: number, max: number) => {
+  if (min === max) return `${min} days`;
+  return `${min}-${max} days`;
+};
+
+// Icon mapping
+const occasionIcons: Record<string, string> = {
+  heart: '\u{1F48D}',
+  cake: '\u{1F382}',
+  rings: '\u{1F495}',
+  cap: '\u{1F393}',
+};
+
+// Generate static paths for all occasions
+export async function getStaticPaths() {
+  let occasions: Occasion[] = [];
+  try {
+    occasions = await getOccasions();
+  } catch {
+    occasions = [
+      { slug: 'wedding' },
+      { slug: 'birthday' },
+      { slug: 'anniversary' },
+      { slug: 'graduation' },
+    ] as Occasion[];
+  }
+
+  return occasions.map((occasion) => ({
+    params: { occasion: occasion.slug },
+  }));
+}
+
+// Redirect to 404 if occasion not found
+if (!occasion) {
+  return Astro.redirect('/404');
+}
+---
+
+<PublicLayout
+  title={`Order a ${occasion.name} Song | Eventune Studios`}
+  description={occasion.meta_description || `Create a custom ${occasion.name.toLowerCase()} song. ${occasion.tagline}`}
+>
+  <!-- Hero Section -->
+  <section class="py-12 md:py-16 bg-primary-cardBlack">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-center gap-4 mb-4">
+        <span class="text-4xl">{occasionIcons[occasion.icon || 'heart']}</span>
+        <h1 class="text-3xl md:text-4xl font-heading font-bold text-text-primary">
+          {occasion.name} Song
+        </h1>
+      </div>
+      <p class="text-lg text-text-secondary text-center max-w-2xl mx-auto">
+        {occasion.tagline || `Create a personalized ${occasion.name.toLowerCase()} song that tells your unique story.`}
+      </p>
+    </div>
+  </section>
+
+  <!-- Order Steps Indicator -->
+  <section class="py-8 border-b border-text-muted/20">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-center gap-2 md:gap-4">
+        {[
+          { step: 1, label: 'Choose Package', active: true },
+          { step: 2, label: 'Tell Your Story', active: false },
+          { step: 3, label: 'Checkout', active: false },
+        ].map(({ step, label, active }) => (
+          <div class="flex items-center">
+            <div class={`flex items-center gap-2 ${active ? 'text-accent-gold' : 'text-text-muted'}`}>
+              <div class={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                active ? 'bg-accent-gold text-primary-black' : 'bg-text-muted/20'
+              }`}>
+                {step}
+              </div>
+              <span class="hidden sm:inline text-sm font-medium">{label}</span>
+            </div>
+            {step < 3 && (
+              <div class="w-8 md:w-16 h-0.5 bg-text-muted/20 mx-2"></div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- Package Selection -->
+  <section class="py-12 md:py-16">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-8">
+        <h2 class="text-2xl md:text-3xl font-heading font-bold text-text-primary mb-2">
+          Choose Your Package
+        </h2>
+        <p class="text-text-secondary">
+          Select the package that best fits your needs and timeline.
+        </p>
+      </div>
+
+      <!-- Currency Toggle -->
+      <div class="flex justify-center mb-8">
+        <div class="inline-flex items-center gap-2 p-1 bg-primary-cardBlack rounded-lg" id="currency-toggle">
+          <button
+            type="button"
+            class="px-4 py-2 text-sm font-medium rounded-md transition-colors currency-btn active bg-accent-gold text-primary-black"
+            data-currency="USD"
+          >
+            USD ($)
+          </button>
+          <button
+            type="button"
+            class="px-4 py-2 text-sm font-medium rounded-md transition-colors currency-btn text-text-secondary"
+            data-currency="XAF"
+          >
+            XAF (CFA)
+          </button>
+        </div>
+      </div>
+
+      <!-- Package Cards -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6" id="package-selection">
+        {packages.map((pkg) => (
+          <label
+            class={`package-card cursor-pointer block ${pkg.slug === preselectedPackage ? 'selected' : ''}`}
+            data-package={pkg.slug}
+          >
+            <input
+              type="radio"
+              name="package"
+              value={pkg.slug}
+              checked={pkg.slug === preselectedPackage}
+              class="sr-only"
+            />
+            <Card
+              variant={pkg.is_popular ? 'bordered' : 'elevated'}
+              class={`relative h-full transition-all ${pkg.is_popular ? 'border-accent-gold' : ''} ${pkg.slug === preselectedPackage ? 'ring-2 ring-accent-gold' : ''}`}
+            >
+              {pkg.is_popular && (
+                <div class="absolute -top-3 left-1/2 -translate-x-1/2">
+                  <Badge variant="gold">Most Popular</Badge>
+                </div>
+              )}
+
+              <h3 class="text-xl font-heading font-bold text-text-primary mb-2">{pkg.name}</h3>
+
+              <div class="mb-4 price-display" data-usd={pkg.price_usd} data-xaf={pkg.price_xaf}>
+                <span class="text-3xl font-bold text-accent-gold price-value">${pkg.price_usd}</span>
+                <span class="text-text-muted text-sm ml-1 price-currency">USD</span>
+              </div>
+
+              <ul class="space-y-2 text-sm text-text-secondary mb-4">
+                <li class="flex items-center gap-2">
+                  <svg class="w-4 h-4 text-accent-gold flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                  </svg>
+                  {formatDelivery(pkg.delivery_days_min, pkg.delivery_days_max)} delivery
+                </li>
+                <li class="flex items-center gap-2">
+                  <svg class="w-4 h-4 text-accent-gold flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                  </svg>
+                  {pkg.revision_count} revision{pkg.revision_count !== 1 ? 's' : ''}
+                </li>
+                {pkg.includes_discovery_call && (
+                  <li class="flex items-center gap-2">
+                    <svg class="w-4 h-4 text-accent-gold flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                    </svg>
+                    Discovery call
+                  </li>
+                )}
+                {pkg.includes_instrumental && (
+                  <li class="flex items-center gap-2">
+                    <svg class="w-4 h-4 text-accent-gold flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                    </svg>
+                    Instrumental track
+                  </li>
+                )}
+                {pkg.includes_full_rights && (
+                  <li class="flex items-center gap-2">
+                    <svg class="w-4 h-4 text-accent-gold flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                    </svg>
+                    Full ownership
+                  </li>
+                )}
+              </ul>
+
+              <!-- Selection indicator -->
+              <div class="selection-indicator absolute top-4 right-4 w-6 h-6 rounded-full border-2 border-text-muted/30 flex items-center justify-center">
+                <svg class="w-4 h-4 text-accent-gold hidden check-icon" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                </svg>
+              </div>
+            </Card>
+          </label>
+        ))}
+      </div>
+
+      <!-- Continue Button -->
+      <div class="mt-12 text-center">
+        <Button
+          id="continue-btn"
+          variant="primary"
+          size="lg"
+          class="min-w-[200px]"
+        >
+          Continue to Questionnaire
+        </Button>
+        <p class="text-text-muted text-sm mt-4">
+          <a href="/services" class="text-accent-gold hover:text-accent-goldHover">View detailed package comparison</a>
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Other Occasions -->
+  <section class="py-12 md:py-16 bg-primary-cardBlack">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-8">
+        <h2 class="text-xl font-heading font-semibold text-text-primary mb-2">
+          Looking for a different occasion?
+        </h2>
+      </div>
+      <div class="flex flex-wrap justify-center gap-4">
+        {allOccasions.filter((o) => o.slug !== occasionSlug).map((o) => (
+          <a
+            href={`/order/${o.slug}`}
+            class="inline-flex items-center gap-2 px-4 py-2 bg-primary-hoverBlack rounded-full text-text-secondary hover:text-accent-gold transition-colors"
+          >
+            <span>{occasionIcons[o.icon || 'heart']}</span>
+            <span>{o.name}</span>
+          </a>
+        ))}
+      </div>
+    </div>
+  </section>
+</PublicLayout>
+
+<script>
+  // Package selection
+  const packageCards = document.querySelectorAll('.package-card');
+  const continueBtn = document.getElementById('continue-btn');
+
+  packageCards.forEach((card) => {
+    card.addEventListener('click', () => {
+      // Update visual selection
+      packageCards.forEach((c) => {
+        c.classList.remove('selected');
+        const cardInner = c.querySelector('.card, [class*="Card"]');
+        cardInner?.classList.remove('ring-2', 'ring-accent-gold');
+        const check = c.querySelector('.check-icon');
+        check?.classList.add('hidden');
+        const indicator = c.querySelector('.selection-indicator');
+        indicator?.classList.remove('bg-accent-gold', 'border-accent-gold');
+      });
+
+      card.classList.add('selected');
+      const cardInner = card.querySelector('.card, [class*="Card"]');
+      cardInner?.classList.add('ring-2', 'ring-accent-gold');
+      const check = card.querySelector('.check-icon');
+      check?.classList.remove('hidden');
+      const indicator = card.querySelector('.selection-indicator');
+      indicator?.classList.add('bg-accent-gold', 'border-accent-gold');
+    });
+  });
+
+  // Initialize selected package
+  const selectedCard = document.querySelector('.package-card.selected');
+  if (selectedCard) {
+    const check = selectedCard.querySelector('.check-icon');
+    check?.classList.remove('hidden');
+    const indicator = selectedCard.querySelector('.selection-indicator');
+    indicator?.classList.add('bg-accent-gold', 'border-accent-gold');
+  }
+
+  // Continue button
+  continueBtn?.addEventListener('click', () => {
+    const selectedPackage = document.querySelector('.package-card.selected');
+    const packageSlug = selectedPackage?.getAttribute('data-package') || 'classic';
+    const occasionSlug = window.location.pathname.split('/').pop();
+
+    // TODO: Navigate to questionnaire page
+    // For now, show an alert
+    alert(`Selected package: ${packageSlug}\nOccasion: ${occasionSlug}\n\nQuestionnaire page coming soon!`);
+  });
+
+  // Currency toggle
+  const currencyBtns = document.querySelectorAll('.currency-btn');
+  const priceDisplays = document.querySelectorAll('.price-display');
+
+  currencyBtns.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const currency = btn.getAttribute('data-currency');
+
+      // Update active state
+      currencyBtns.forEach((b) => {
+        b.classList.remove('active', 'bg-accent-gold', 'text-primary-black');
+        b.classList.add('text-text-secondary');
+      });
+      btn.classList.add('active', 'bg-accent-gold', 'text-primary-black');
+      btn.classList.remove('text-text-secondary');
+
+      // Update prices
+      priceDisplays.forEach((display) => {
+        const priceValue = display.querySelector('.price-value');
+        const priceCurrency = display.querySelector('.price-currency');
+
+        if (currency === 'USD') {
+          const usd = display.getAttribute('data-usd');
+          if (priceValue) priceValue.textContent = `$${usd}`;
+          if (priceCurrency) priceCurrency.textContent = 'USD';
+        } else {
+          const xaf = parseInt(display.getAttribute('data-xaf') || '0');
+          if (priceValue) priceValue.textContent = xaf.toLocaleString();
+          if (priceCurrency) priceCurrency.textContent = 'CFA';
+        }
+      });
+    });
+  });
+</script>
+
+<style>
+  .package-card.selected .selection-indicator {
+    background-color: var(--color-accent-gold);
+    border-color: var(--color-accent-gold);
+  }
+</style>

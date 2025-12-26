@@ -1,0 +1,50 @@
+---
+/**
+ * Auth Layout
+ * Minimal layout for authentication pages (login, signup, reset password)
+ */
+
+import BaseLayout from './BaseLayout.astro';
+import { brandConfig } from '../config';
+
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const { title, description } = Astro.props;
+---
+
+<BaseLayout title={title} description={description} noIndex>
+  <div class="min-h-screen flex flex-col bg-primary-black">
+    <!-- Header -->
+    <header class="py-6">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <a href="/" class="inline-flex items-center gap-2 group">
+          <span class="font-heading text-xl md:text-2xl font-bold text-accent-gold group-hover:text-accent-goldHover transition-colors">
+            Eventune
+          </span>
+          <span class="hidden sm:inline font-heading text-xl md:text-2xl font-bold text-text-primary">
+            Studios
+          </span>
+        </a>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <div class="w-full max-w-md">
+        <slot />
+      </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="py-6">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+        <p class="text-text-muted text-sm">
+          &copy; {new Date().getFullYear()} {brandConfig.name}. All rights reserved.
+        </p>
+      </div>
+    </footer>
+  </div>
+</BaseLayout>

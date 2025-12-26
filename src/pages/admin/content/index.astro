@@ -1,0 +1,911 @@
+---
+/**
+ * Admin Content Management
+ * Manage packages, occasions, FAQ, and testimonials
+ *
+ * Security: Admin role with content:view permission required
+ */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import {
+  getContentPackages,
+  getContentOccasions,
+  getContentFAQ,
+  getContentTestimonials,
+} from '../../../services/admin.service';
+import { hasPermission } from '../../../lib/auth/admin-session';
+import type { AdminSessionData } from '../../../lib/auth/admin-session';
+
+// Get admin session from layout
+const adminSession = Astro.locals.adminSession as AdminSessionData;
+const { permissions } = adminSession;
+const csrfToken = Astro.locals.csrfToken as string;
+
+// Verify content permission
+if (!hasPermission(permissions, 'content:view')) {
+  return Astro.redirect('/admin?error=permission_denied');
+}
+
+const canEdit = hasPermission(permissions, 'content:update');
+
+// Parse active tab from URL
+const url = new URL(Astro.request.url);
+const activeTab = url.searchParams.get('tab') || 'packages';
+
+// Fetch all content data in parallel
+const [packages, occasions, faqItems, testimonials] = await Promise.all([
+  getContentPackages(),
+  getContentOccasions(),
+  getContentFAQ(),
+  getContentTestimonials(),
+]);
+
+function formatSlug(slug: string): string {
+  return (slug || 'unknown').replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+---
+
+<AdminLayout title="Content" activeNav="content">
+  <!-- CSRF Token for AJAX requests -->
+  <input type="hidden" id="csrf-token" value={csrfToken} />
+
+  <!-- Page Header -->
+  <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-8">
+    <div>
+      <h2 class="font-display text-2xl text-admin-cream">Content Management</h2>
+      <p class="text-admin-cream/50 mt-1">Manage packages, occasions, FAQ, and testimonials</p>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs-container">
+    <nav class="tabs-nav">
+      <a
+        href="?tab=packages"
+        class:list={['tab', activeTab === 'packages' && 'active']}
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+        </svg>
+        Packages
+        <span class="tab-count">{packages.length}</span>
+      </a>
+      <a
+        href="?tab=occasions"
+        class:list={['tab', activeTab === 'occasions' && 'active']}
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
+        </svg>
+        Occasions
+        <span class="tab-count">{occasions.length}</span>
+      </a>
+      <a
+        href="?tab=faq"
+        class:list={['tab', activeTab === 'faq' && 'active']}
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        FAQ
+        <span class="tab-count">{faqItems.length}</span>
+      </a>
+      <a
+        href="?tab=testimonials"
+        class:list={['tab', activeTab === 'testimonials' && 'active']}
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+        </svg>
+        Testimonials
+        <span class="tab-count">{testimonials.length}</span>
+      </a>
+    </nav>
+  </div>
+
+  <!-- Tab Content -->
+  <div class="tab-content">
+    <!-- Packages Tab -->
+    {activeTab === 'packages' && (
+      <div class="content-section">
+        <div class="section-header">
+          <h3 class="font-display text-lg text-admin-cream">Service Packages</h3>
+          <p class="text-admin-cream/40 text-sm">Manage pricing and availability</p>
+        </div>
+
+        <div class="packages-grid">
+          {packages.map((pkg) => (
+            <div class:list={['package-card', !pkg.is_active && 'inactive']}>
+              <div class="package-header">
+                <div class="package-title">
+                  <h4 class="package-name">{pkg.name}</h4>
+                  {pkg.is_popular && (
+                    <span class="popular-badge">Popular</span>
+                  )}
+                </div>
+                <label class="toggle-switch">
+                  <input
+                    type="checkbox"
+                    checked={pkg.is_active}
+                    data-id={pkg.id}
+                    data-table="config_packages"
+                    class="toggle-active"
+                    disabled={!canEdit}
+                  />
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+
+              <p class="package-description">{pkg.description}</p>
+
+              <div class="package-pricing">
+                <div class="price-row">
+                  <span class="price-label">USD</span>
+                  <span class="price-value">${pkg.price_usd}</span>
+                </div>
+                <div class="price-row">
+                  <span class="price-label">XAF</span>
+                  <span class="price-value">{pkg.price_xaf.toLocaleString()}</span>
+                </div>
+              </div>
+
+              <div class="package-features">
+                <div class="feature-row">
+                  <span class="feature-label">Song Length</span>
+                  <span class="feature-value">{pkg.song_length_min}-{pkg.song_length_max} min</span>
+                </div>
+                <div class="feature-row">
+                  <span class="feature-label">Delivery</span>
+                  <span class="feature-value">{pkg.delivery_days_min}-{pkg.delivery_days_max} days</span>
+                </div>
+                <div class="feature-row">
+                  <span class="feature-label">Revisions</span>
+                  <span class="feature-value">{pkg.revision_count || 'None'}</span>
+                </div>
+                <div class="feature-row">
+                  <span class="feature-label">Discovery Call</span>
+                  <span class:list={['feature-value', pkg.includes_discovery_call && 'text-emerald-400']}>
+                    {pkg.includes_discovery_call ? 'Yes' : 'No'}
+                  </span>
+                </div>
+                <div class="feature-row">
+                  <span class="feature-label">Instrumental</span>
+                  <span class:list={['feature-value', pkg.includes_instrumental && 'text-emerald-400']}>
+                    {pkg.includes_instrumental ? 'Yes' : 'No'}
+                  </span>
+                </div>
+                <div class="feature-row">
+                  <span class="feature-label">Full Rights</span>
+                  <span class:list={['feature-value', pkg.includes_full_rights && 'text-emerald-400']}>
+                    {pkg.includes_full_rights ? 'Yes' : 'No'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+
+    <!-- Occasions Tab -->
+    {activeTab === 'occasions' && (
+      <div class="content-section">
+        <div class="section-header">
+          <h3 class="font-display text-lg text-admin-cream">Event Occasions</h3>
+          <p class="text-admin-cream/40 text-sm">Manage occasion types for orders</p>
+        </div>
+
+        <div class="occasions-grid">
+          {occasions.map((occ) => (
+            <div class:list={['occasion-card', !occ.is_active && 'inactive']}>
+              <div class="occasion-header">
+                <div class="occasion-icon">
+                  <span>{occ.icon || '🎵'}</span>
+                </div>
+                <label class="toggle-switch">
+                  <input
+                    type="checkbox"
+                    checked={occ.is_active}
+                    data-id={occ.id}
+                    data-table="config_occasions"
+                    class="toggle-active"
+                    disabled={!canEdit}
+                  />
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+
+              <h4 class="occasion-name">{occ.name}</h4>
+              <p class="occasion-tagline">{occ.tagline}</p>
+              <p class="occasion-description">{occ.description}</p>
+
+              <div class="occasion-meta">
+                <span class="meta-item">
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
+                  </svg>
+                  {occ.slug}
+                </span>
+                <span class="meta-item">Order #{occ.display_order}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+
+    <!-- FAQ Tab -->
+    {activeTab === 'faq' && (
+      <div class="content-section">
+        <div class="section-header">
+          <h3 class="font-display text-lg text-admin-cream">FAQ Items</h3>
+          <p class="text-admin-cream/40 text-sm">Manage frequently asked questions</p>
+        </div>
+
+        <div class="faq-list">
+          {faqItems.map((faq, index) => (
+            <div class:list={['faq-item', !faq.is_active && 'inactive']}>
+              <div class="faq-header">
+                <div class="faq-number">Q{index + 1}</div>
+                <div class="faq-controls">
+                  {faq.category && (
+                    <span class="faq-category">{faq.category}</span>
+                  )}
+                  <label class="toggle-switch small">
+                    <input
+                      type="checkbox"
+                      checked={faq.is_active}
+                      data-id={faq.id}
+                      data-table="config_faq"
+                      class="toggle-active"
+                      disabled={!canEdit}
+                    />
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+              <h4 class="faq-question">{faq.question}</h4>
+              <p class="faq-answer">{faq.answer}</p>
+            </div>
+          ))}
+        </div>
+
+        {faqItems.length === 0 && (
+          <div class="empty-state">
+            <p class="text-admin-cream/40">No FAQ items found</p>
+          </div>
+        )}
+      </div>
+    )}
+
+    <!-- Testimonials Tab -->
+    {activeTab === 'testimonials' && (
+      <div class="content-section">
+        <div class="section-header">
+          <h3 class="font-display text-lg text-admin-cream">Customer Testimonials</h3>
+          <p class="text-admin-cream/40 text-sm">Manage customer reviews and testimonials</p>
+        </div>
+
+        {testimonials.length === 0 ? (
+          <div class="empty-state">
+            <svg class="w-12 h-12 text-gold/20 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+            <p class="text-admin-cream/40">No testimonials yet</p>
+            <p class="text-admin-cream/30 text-sm mt-1">Add testimonials to display on the website</p>
+          </div>
+        ) : (
+          <div class="testimonials-grid">
+            {testimonials.map((test) => (
+              <div class:list={['testimonial-card', !test.is_active && 'inactive']}>
+                <div class="testimonial-header">
+                  <div class="testimonial-author">
+                    <div class="author-avatar">
+                      {test.image_url ? (
+                        <img src={test.image_url} alt={test.customer_name} />
+                      ) : (
+                        <span>{test.customer_name.charAt(0)}</span>
+                      )}
+                    </div>
+                    <div class="author-info">
+                      <span class="author-name">{test.customer_name}</span>
+                      {test.customer_location && (
+                        <span class="author-location">{test.customer_location}</span>
+                      )}
+                    </div>
+                  </div>
+                  <label class="toggle-switch">
+                    <input
+                      type="checkbox"
+                      checked={test.is_active}
+                      data-id={test.id}
+                      data-table="config_testimonials"
+                      class="toggle-active"
+                      disabled={!canEdit}
+                    />
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+
+                <blockquote class="testimonial-quote">"{test.quote}"</blockquote>
+
+                <div class="testimonial-footer">
+                  {test.occasion && (
+                    <span class="testimonial-occasion">{formatSlug(test.occasion)}</span>
+                  )}
+                  {test.rating && (
+                    <div class="testimonial-rating">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <svg
+                          class:list={['w-3 h-3', i < test.rating! ? 'text-gold' : 'text-admin-cream/20']}
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                        </svg>
+                      ))}
+                    </div>
+                  )}
+                  {test.is_featured && (
+                    <span class="featured-badge">Featured</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    )}
+  </div>
+</AdminLayout>
+
+<style>
+  :root {
+    --admin-black: #0A0A0A;
+    --admin-card: #111111;
+    --admin-cream: #F5F5F5;
+    --gold: #D4AF37;
+  }
+
+  .font-display { font-family: 'Playfair Display', serif; }
+
+  /* Tabs */
+  .tabs-container {
+    margin-bottom: 2rem;
+  }
+
+  .tabs-nav {
+    display: flex;
+    gap: 0.25rem;
+    background: var(--admin-card);
+    border: 1px solid rgba(212, 175, 55, 0.08);
+    border-radius: 0.75rem;
+    padding: 0.5rem;
+    overflow-x: auto;
+  }
+
+  .tab {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.25rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: rgba(245, 245, 245, 0.5);
+    white-space: nowrap;
+    transition: all 0.2s ease;
+  }
+
+  .tab:hover {
+    color: var(--admin-cream);
+    background: rgba(212, 175, 55, 0.05);
+  }
+
+  .tab.active {
+    color: var(--gold);
+    background: rgba(212, 175, 55, 0.1);
+  }
+
+  .tab-count {
+    padding: 0.125rem 0.5rem;
+    background: rgba(245, 245, 245, 0.1);
+    border-radius: 9999px;
+    font-size: 0.7rem;
+    font-weight: 600;
+  }
+
+  .tab.active .tab-count {
+    background: rgba(212, 175, 55, 0.2);
+    color: var(--gold);
+  }
+
+  /* Content Section */
+  .content-section {
+    background: var(--admin-card);
+    border: 1px solid rgba(212, 175, 55, 0.08);
+    border-radius: 1rem;
+    overflow: hidden;
+  }
+
+  .section-header {
+    padding: 1.5rem;
+    border-bottom: 1px solid rgba(212, 175, 55, 0.08);
+  }
+
+  /* Packages Grid */
+  .packages-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+    padding: 1.5rem;
+  }
+
+  .package-card {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(212, 175, 55, 0.1);
+    border-radius: 0.75rem;
+    padding: 1.25rem;
+    transition: all 0.2s ease;
+  }
+
+  .package-card.inactive {
+    opacity: 0.5;
+  }
+
+  .package-card:hover {
+    border-color: rgba(212, 175, 55, 0.2);
+  }
+
+  .package-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+  }
+
+  .package-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .package-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.25rem;
+    color: var(--gold);
+  }
+
+  .popular-badge {
+    padding: 0.125rem 0.5rem;
+    background: rgba(16, 185, 129, 0.15);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    border-radius: 9999px;
+    font-size: 0.6rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #10b981;
+  }
+
+  .package-description {
+    font-size: 0.8rem;
+    color: rgba(245, 245, 245, 0.5);
+    margin-bottom: 1rem;
+  }
+
+  .package-pricing {
+    display: flex;
+    gap: 1rem;
+    padding: 0.75rem;
+    background: rgba(212, 175, 55, 0.05);
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .price-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+
+  .price-label {
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: rgba(245, 245, 245, 0.4);
+  }
+
+  .price-value {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--admin-cream);
+  }
+
+  .package-features {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .feature-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+  }
+
+  .feature-label {
+    color: rgba(245, 245, 245, 0.4);
+  }
+
+  .feature-value {
+    color: rgba(245, 245, 245, 0.7);
+  }
+
+  /* Toggle Switch */
+  .toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 2.5rem;
+    height: 1.25rem;
+  }
+
+  .toggle-switch.small {
+    width: 2rem;
+    height: 1rem;
+  }
+
+  .toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+
+  .toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    inset: 0;
+    background: rgba(245, 245, 245, 0.1);
+    border-radius: 9999px;
+    transition: 0.3s;
+  }
+
+  .toggle-slider::before {
+    position: absolute;
+    content: "";
+    height: 1rem;
+    width: 1rem;
+    left: 2px;
+    bottom: 2px;
+    background: rgba(245, 245, 245, 0.5);
+    border-radius: 50%;
+    transition: 0.3s;
+  }
+
+  .toggle-switch.small .toggle-slider::before {
+    height: 0.75rem;
+    width: 0.75rem;
+    left: 2px;
+    bottom: 2px;
+  }
+
+  input:checked + .toggle-slider {
+    background: rgba(16, 185, 129, 0.3);
+  }
+
+  input:checked + .toggle-slider::before {
+    background: #10b981;
+    transform: translateX(1.25rem);
+  }
+
+  .toggle-switch.small input:checked + .toggle-slider::before {
+    transform: translateX(1rem);
+  }
+
+  input:disabled + .toggle-slider {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  /* Occasions Grid */
+  .occasions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 1rem;
+    padding: 1.5rem;
+  }
+
+  .occasion-card {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(212, 175, 55, 0.1);
+    border-radius: 0.75rem;
+    padding: 1.25rem;
+    transition: all 0.2s ease;
+  }
+
+  .occasion-card.inactive {
+    opacity: 0.5;
+  }
+
+  .occasion-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+  }
+
+  .occasion-icon {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 0.5rem;
+    background: rgba(212, 175, 55, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+  }
+
+  .occasion-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.125rem;
+    color: var(--admin-cream);
+    margin-bottom: 0.25rem;
+  }
+
+  .occasion-tagline {
+    font-size: 0.8rem;
+    color: var(--gold);
+    font-style: italic;
+    margin-bottom: 0.5rem;
+  }
+
+  .occasion-description {
+    font-size: 0.75rem;
+    color: rgba(245, 245, 245, 0.4);
+    margin-bottom: 0.75rem;
+  }
+
+  .occasion-meta {
+    display: flex;
+    gap: 0.75rem;
+    font-size: 0.65rem;
+    color: rgba(245, 245, 245, 0.3);
+  }
+
+  .meta-item {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  /* FAQ List */
+  .faq-list {
+    display: flex;
+    flex-direction: column;
+    padding: 0.5rem;
+  }
+
+  .faq-item {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid rgba(212, 175, 55, 0.05);
+    transition: background 0.2s ease;
+  }
+
+  .faq-item:hover {
+    background: rgba(212, 175, 55, 0.02);
+  }
+
+  .faq-item.inactive {
+    opacity: 0.5;
+  }
+
+  .faq-item:last-child {
+    border-bottom: none;
+  }
+
+  .faq-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+  }
+
+  .faq-number {
+    font-family: 'Playfair Display', serif;
+    font-size: 0.875rem;
+    color: var(--gold);
+    font-weight: 600;
+  }
+
+  .faq-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .faq-category {
+    padding: 0.25rem 0.5rem;
+    background: rgba(212, 175, 55, 0.1);
+    border-radius: 0.25rem;
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--gold);
+  }
+
+  .faq-question {
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--admin-cream);
+    margin-bottom: 0.5rem;
+  }
+
+  .faq-answer {
+    font-size: 0.85rem;
+    color: rgba(245, 245, 245, 0.5);
+    line-height: 1.5;
+  }
+
+  /* Testimonials Grid */
+  .testimonials-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1rem;
+    padding: 1.5rem;
+  }
+
+  .testimonial-card {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(212, 175, 55, 0.1);
+    border-radius: 0.75rem;
+    padding: 1.25rem;
+  }
+
+  .testimonial-card.inactive {
+    opacity: 0.5;
+  }
+
+  .testimonial-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+  }
+
+  .testimonial-author {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .author-avatar {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 9999px;
+    background: linear-gradient(135deg, rgba(212, 175, 55, 0.2) 0%, rgba(212, 175, 55, 0.1) 100%);
+    border: 1px solid rgba(212, 175, 55, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    color: var(--gold);
+    font-weight: 600;
+  }
+
+  .author-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .author-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+
+  .author-name {
+    font-weight: 500;
+    color: var(--admin-cream);
+    font-size: 0.875rem;
+  }
+
+  .author-location {
+    font-size: 0.7rem;
+    color: rgba(245, 245, 245, 0.4);
+  }
+
+  .testimonial-quote {
+    font-size: 0.9rem;
+    color: rgba(245, 245, 245, 0.7);
+    line-height: 1.5;
+    margin-bottom: 1rem;
+    font-style: italic;
+  }
+
+  .testimonial-footer {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .testimonial-occasion {
+    padding: 0.25rem 0.5rem;
+    background: rgba(212, 175, 55, 0.1);
+    border-radius: 0.25rem;
+    font-size: 0.65rem;
+    color: var(--gold);
+  }
+
+  .testimonial-rating {
+    display: flex;
+    gap: 0.125rem;
+  }
+
+  .featured-badge {
+    padding: 0.125rem 0.5rem;
+    background: rgba(168, 85, 247, 0.15);
+    border: 1px solid rgba(168, 85, 247, 0.3);
+    border-radius: 9999px;
+    font-size: 0.6rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: #a855f7;
+  }
+
+  /* Empty State */
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4rem;
+    text-align: center;
+  }
+
+  /* Color utilities */
+  .text-gold { color: var(--gold); }
+  .text-admin-cream { color: var(--admin-cream); }
+</style>
+
+<script>
+  // Toggle active status
+  const toggleInputs = document.querySelectorAll('.toggle-active');
+  const csrfTokenEl = document.getElementById('csrf-token') as HTMLInputElement;
+
+  toggleInputs.forEach(input => {
+    input.addEventListener('change', async (e) => {
+      const target = e.target as HTMLInputElement;
+      const id = target.dataset.id;
+      const table = target.dataset.table;
+      const isActive = target.checked;
+      const csrfToken = csrfTokenEl?.value || '';
+
+      try {
+        const response = await fetch('/api/admin/content/toggle-active', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, table, is_active: isActive, csrf_token: csrfToken }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to update');
+        }
+
+        // Visual feedback
+        const card = target.closest('.package-card, .occasion-card, .faq-item, .testimonial-card');
+        if (card) {
+          if (isActive) {
+            card.classList.remove('inactive');
+          } else {
+            card.classList.add('inactive');
+          }
+        }
+      } catch (error) {
+        console.error('Error toggling active status:', error);
+        // Revert checkbox
+        target.checked = !isActive;
+      }
+    });
+  });
+</script>

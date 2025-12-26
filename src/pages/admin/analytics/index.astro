@@ -1,0 +1,946 @@
+---
+/**
+ * Admin Analytics Dashboard
+ * Comprehensive business intelligence and performance metrics
+ *
+ * Security: Admin role with analytics:view permission required
+ */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import {
+  getAnalyticsOverview,
+  getRevenueByPackage,
+  getRevenueByOccasion,
+  getOrderStatusDistribution,
+  getExtendedTrends,
+  getTopPackages,
+  getCustomerAcquisitionTrends,
+} from '../../../services/admin.service';
+import { hasPermission } from '../../../lib/auth/admin-session';
+import type { AdminSessionData } from '../../../lib/auth/admin-session';
+
+// Get admin session from layout
+const adminSession = Astro.locals.adminSession as AdminSessionData;
+const { permissions } = adminSession;
+
+// Verify analytics permission
+if (!hasPermission(permissions, 'analytics:view')) {
+  return Astro.redirect('/admin?error=permission_denied');
+}
+
+// Fetch all analytics data in parallel
+const [
+  overview,
+  packageRevenue,
+  occasionRevenue,
+  statusDistribution,
+  trends30,
+  topPackages,
+  customerTrends,
+] = await Promise.all([
+  getAnalyticsOverview(),
+  getRevenueByPackage(),
+  getRevenueByOccasion(),
+  getOrderStatusDistribution(),
+  getExtendedTrends(30),
+  getTopPackages(5),
+  getCustomerAcquisitionTrends(30),
+]);
+
+// Calculate totals for charts
+const maxOrders = Math.max(...trends30.map(t => t.orders), 1);
+const maxRevenue = Math.max(...trends30.map(t => t.revenue_usd + t.revenue_xaf / 650), 1);
+const maxCustomers = Math.max(...customerTrends.map(t => t.new_customers), 1);
+const totalPackageOrders = packageRevenue.reduce((sum, p) => sum + p.order_count, 0) || 1;
+
+// Status color mapping
+const statusColors: Record<string, string> = {
+  pending: '#fbbf24',
+  payment_pending: '#f59e0b',
+  paid: '#10b981',
+  in_progress: '#3b82f6',
+  composing: '#6366f1',
+  recording: '#8b5cf6',
+  mixing: '#a855f7',
+  review: '#06b6d4',
+  completed: '#22c55e',
+  delivered: '#D4AF37',
+  cancelled: '#ef4444',
+};
+
+function formatSlug(slug: string): string {
+  return (slug || 'unknown').replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function formatCurrency(amount: number, currency: 'USD' | 'XAF'): string {
+  if (currency === 'XAF') {
+    return `${amount.toLocaleString()} XAF`;
+  }
+  return `$${amount.toLocaleString()}`;
+}
+---
+
+<AdminLayout title="Analytics" activeNav="analytics">
+  <!-- Page Header -->
+  <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-8">
+    <div>
+      <h2 class="font-display text-2xl text-admin-cream">Business Analytics</h2>
+      <p class="text-admin-cream/50 mt-1">Performance insights and revenue metrics</p>
+    </div>
+    <div class="flex items-center gap-3">
+      <div class="period-selector">
+        <button class="period-btn active" data-period="30">30 Days</button>
+        <button class="period-btn" data-period="60">60 Days</button>
+        <button class="period-btn" data-period="90">90 Days</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Overview Stats -->
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+    <!-- Total Revenue USD -->
+    <div class="metric-card group">
+      <div class="metric-icon bg-emerald-500/10">
+        <svg class="w-6 h-6 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      </div>
+      <div class="metric-content">
+        <p class="metric-value text-emerald-400">${overview.totalRevenue.usd.toLocaleString()}</p>
+        <p class="metric-label">USD Revenue</p>
+      </div>
+      <div class="metric-detail">
+        <span class="text-admin-cream/40">Avg:</span>
+        <span class="text-emerald-400/80">${overview.avgOrderValue.usd}</span>
+      </div>
+    </div>
+
+    <!-- Total Revenue XAF -->
+    <div class="metric-card group">
+      <div class="metric-icon bg-purple-500/10">
+        <svg class="w-6 h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
+        </svg>
+      </div>
+      <div class="metric-content">
+        <p class="metric-value text-purple-400">{overview.totalRevenue.xaf.toLocaleString()}</p>
+        <p class="metric-label">XAF Revenue</p>
+      </div>
+      <div class="metric-detail">
+        <span class="text-admin-cream/40">Avg:</span>
+        <span class="text-purple-400/80">{overview.avgOrderValue.xaf.toLocaleString()} XAF</span>
+      </div>
+    </div>
+
+    <!-- Conversion Rate -->
+    <div class="metric-card group">
+      <div class="metric-icon bg-gold/10">
+        <svg class="w-6 h-6 text-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+        </svg>
+      </div>
+      <div class="metric-content">
+        <p class="metric-value text-gold">{overview.conversionRate}%</p>
+        <p class="metric-label">Conversion Rate</p>
+      </div>
+      <div class="metric-detail">
+        <span class="text-admin-cream/40">Orders paid</span>
+      </div>
+    </div>
+
+    <!-- Repeat Customers -->
+    <div class="metric-card group">
+      <div class="metric-icon bg-cyan-500/10">
+        <svg class="w-6 h-6 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+      </div>
+      <div class="metric-content">
+        <p class="metric-value text-cyan-400">{overview.repeatCustomerRate}%</p>
+        <p class="metric-label">Repeat Rate</p>
+      </div>
+      <div class="metric-detail">
+        <span class="text-admin-cream/40">{overview.totalCustomers} total customers</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Charts Row -->
+  <div class="grid lg:grid-cols-2 gap-6 mb-8">
+    <!-- Orders Trend -->
+    <div class="chart-card">
+      <div class="chart-header">
+        <div>
+          <h3 class="font-display text-lg text-admin-cream">Orders Trend</h3>
+          <p class="text-admin-cream/40 text-sm mt-1">Daily orders over the period</p>
+        </div>
+        <div class="chart-badge">{overview.totalOrders} total</div>
+      </div>
+      <div class="chart-area">
+        <div class="area-chart" id="orders-trend">
+          {trends30.map((point, i) => (
+            <div class="area-bar-container" data-date={point.date}>
+              <div class="area-bar">
+                <div
+                  class="bar-fill bg-gradient-to-t from-gold/80 to-gold"
+                  style={`height: ${Math.max(4, (point.orders / maxOrders) * 100)}%;`}
+                >
+                  <span class="bar-tooltip">{point.orders} orders<br/>{point.label}</span>
+                </div>
+              </div>
+              {i % 5 === 0 && (
+                <span class="area-label">{point.label.split(' ')[0]}</span>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+
+    <!-- Revenue Trend -->
+    <div class="chart-card">
+      <div class="chart-header">
+        <div>
+          <h3 class="font-display text-lg text-admin-cream">Revenue Trend</h3>
+          <p class="text-admin-cream/40 text-sm mt-1">Combined revenue (USD + XAF)</p>
+        </div>
+        <div class="chart-badge">${(overview.totalRevenue.usd + overview.totalRevenue.xaf / 650).toLocaleString()}</div>
+      </div>
+      <div class="chart-area">
+        <div class="area-chart" id="revenue-trend">
+          {trends30.map((point, i) => {
+            const combinedRevenue = point.revenue_usd + (point.revenue_xaf / 650);
+            return (
+              <div class="area-bar-container" data-date={point.date}>
+                <div class="area-bar">
+                  <div
+                    class="bar-fill bg-gradient-to-t from-emerald-500/80 to-emerald-400"
+                    style={`height: ${Math.max(4, (combinedRevenue / maxRevenue) * 100)}%;`}
+                  >
+                    <span class="bar-tooltip">${Math.round(combinedRevenue)}<br/>{point.label}</span>
+                  </div>
+                </div>
+                {i % 5 === 0 && (
+                  <span class="area-label">{point.label.split(' ')[0]}</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Breakdown Section -->
+  <div class="grid lg:grid-cols-3 gap-6 mb-8">
+    <!-- Package Revenue -->
+    <div class="breakdown-card">
+      <div class="breakdown-header">
+        <h3 class="font-display text-lg text-admin-cream">By Package</h3>
+        <svg class="w-5 h-5 text-gold/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+        </svg>
+      </div>
+      <div class="breakdown-list">
+        {packageRevenue.length === 0 ? (
+          <p class="text-admin-cream/40 text-sm text-center py-4">No data yet</p>
+        ) : (
+          packageRevenue.slice(0, 4).map((pkg, i) => (
+            <div class="breakdown-item">
+              <div class="breakdown-rank" data-rank={i + 1}>{i + 1}</div>
+              <div class="breakdown-info">
+                <span class="breakdown-name">{formatSlug(pkg.package_slug)}</span>
+                <span class="breakdown-stat">{pkg.order_count} orders</span>
+              </div>
+              <div class="breakdown-bar-container">
+                <div
+                  class="breakdown-bar"
+                  style={`width: ${(pkg.order_count / totalPackageOrders) * 100}%;`}
+                ></div>
+              </div>
+              <div class="breakdown-revenue">
+                {pkg.revenue_usd > 0 && <span class="text-emerald-400">${pkg.revenue_usd.toLocaleString()}</span>}
+                {pkg.revenue_xaf > 0 && <span class="text-purple-400 text-xs">{pkg.revenue_xaf.toLocaleString()} XAF</span>}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+
+    <!-- Occasion Revenue -->
+    <div class="breakdown-card">
+      <div class="breakdown-header">
+        <h3 class="font-display text-lg text-admin-cream">By Occasion</h3>
+        <svg class="w-5 h-5 text-gold/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
+        </svg>
+      </div>
+      <div class="breakdown-list">
+        {occasionRevenue.length === 0 ? (
+          <p class="text-admin-cream/40 text-sm text-center py-4">No data yet</p>
+        ) : (
+          occasionRevenue.slice(0, 4).map((occ, i) => {
+            const totalOccOrders = occasionRevenue.reduce((sum, o) => sum + o.order_count, 0) || 1;
+            return (
+              <div class="breakdown-item">
+                <div class="breakdown-rank" data-rank={i + 1}>{i + 1}</div>
+                <div class="breakdown-info">
+                  <span class="breakdown-name">{formatSlug(occ.occasion_slug)}</span>
+                  <span class="breakdown-stat">{occ.order_count} orders</span>
+                </div>
+                <div class="breakdown-bar-container">
+                  <div
+                    class="breakdown-bar occasion"
+                    style={`width: ${(occ.order_count / totalOccOrders) * 100}%;`}
+                  ></div>
+                </div>
+                <div class="breakdown-revenue">
+                  {occ.revenue_usd > 0 && <span class="text-emerald-400">${occ.revenue_usd.toLocaleString()}</span>}
+                  {occ.revenue_xaf > 0 && <span class="text-purple-400 text-xs">{occ.revenue_xaf.toLocaleString()} XAF</span>}
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+
+    <!-- Order Status -->
+    <div class="breakdown-card">
+      <div class="breakdown-header">
+        <h3 class="font-display text-lg text-admin-cream">Order Status</h3>
+        <svg class="w-5 h-5 text-gold/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+        </svg>
+      </div>
+      <div class="status-distribution">
+        {statusDistribution.length === 0 ? (
+          <p class="text-admin-cream/40 text-sm text-center py-4">No data yet</p>
+        ) : (
+          <>
+            <div class="status-donut">
+              <svg viewBox="0 0 36 36" class="donut-chart">
+                {(() => {
+                  let offset = 0;
+                  return statusDistribution.map((status) => {
+                    const color = statusColors[status.status] || '#888';
+                    const dashArray = `${status.percentage} ${100 - status.percentage}`;
+                    const dashOffset = 100 - offset + 25;
+                    offset += status.percentage;
+                    return (
+                      <circle
+                        cx="18"
+                        cy="18"
+                        r="15.915"
+                        fill="none"
+                        stroke={color}
+                        stroke-width="3"
+                        stroke-dasharray={dashArray}
+                        stroke-dashoffset={dashOffset}
+                        class="donut-segment"
+                      />
+                    );
+                  });
+                })()}
+              </svg>
+              <div class="donut-center">
+                <span class="donut-value">{overview.totalOrders}</span>
+                <span class="donut-label">Orders</span>
+              </div>
+            </div>
+            <div class="status-legend">
+              {statusDistribution.slice(0, 5).map((status) => (
+                <div class="legend-item">
+                  <span
+                    class="legend-dot"
+                    style={`background-color: ${statusColors[status.status] || '#888'};`}
+                  ></span>
+                  <span class="legend-name">{formatSlug(status.status)}</span>
+                  <span class="legend-count">{status.count}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom Row -->
+  <div class="grid lg:grid-cols-2 gap-6">
+    <!-- Top Packages Performance -->
+    <div class="performance-card">
+      <div class="performance-header">
+        <h3 class="font-display text-lg text-admin-cream">Top Packages Performance</h3>
+        <span class="text-admin-cream/40 text-sm">By revenue</span>
+      </div>
+      <div class="performance-table">
+        <div class="performance-row header">
+          <span>Package</span>
+          <span>Orders</span>
+          <span>Revenue</span>
+          <span>Avg Days</span>
+        </div>
+        {topPackages.length === 0 ? (
+          <div class="performance-empty">
+            <p class="text-admin-cream/40 text-sm">No completed orders yet</p>
+          </div>
+        ) : (
+          topPackages.map((pkg, i) => (
+            <div class="performance-row" data-rank={i + 1}>
+              <span class="performance-name">
+                <span class="rank-badge">{i + 1}</span>
+                {formatSlug(pkg.package_slug)}
+              </span>
+              <span class="performance-orders">{pkg.total_orders}</span>
+              <span class="performance-revenue">${pkg.total_revenue.toLocaleString()}</span>
+              <span class="performance-days">
+                {pkg.avg_completion_days !== null ? (
+                  <span class={pkg.avg_completion_days <= 7 ? 'text-emerald-400' : pkg.avg_completion_days <= 14 ? 'text-amber-400' : 'text-red-400'}>
+                    {pkg.avg_completion_days}d
+                  </span>
+                ) : (
+                  <span class="text-admin-cream/30">-</span>
+                )}
+              </span>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+
+    <!-- Customer Acquisition -->
+    <div class="chart-card">
+      <div class="chart-header">
+        <div>
+          <h3 class="font-display text-lg text-admin-cream">Customer Acquisition</h3>
+          <p class="text-admin-cream/40 text-sm mt-1">New signups over time</p>
+        </div>
+        <div class="chart-badge">{customerTrends.reduce((sum, t) => sum + t.new_customers, 0)} new</div>
+      </div>
+      <div class="chart-area">
+        <div class="area-chart" id="customer-trend">
+          {customerTrends.map((point, i) => (
+            <div class="area-bar-container" data-date={point.date}>
+              <div class="area-bar">
+                <div
+                  class="bar-fill bg-gradient-to-t from-cyan-500/80 to-cyan-400"
+                  style={`height: ${Math.max(4, (point.new_customers / maxCustomers) * 100)}%;`}
+                >
+                  <span class="bar-tooltip">{point.new_customers} new<br/>{point.label}</span>
+                </div>
+              </div>
+              {i % 5 === 0 && (
+                <span class="area-label">{point.label.split(' ')[0]}</span>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  </div>
+</AdminLayout>
+
+<style>
+  :root {
+    --admin-black: #0A0A0A;
+    --admin-card: #111111;
+    --admin-cream: #F5F5F5;
+    --gold: #D4AF37;
+  }
+
+  .font-display { font-family: 'Playfair Display', serif; }
+
+  /* Period Selector */
+  .period-selector {
+    display: flex;
+    background: var(--admin-card);
+    border: 1px solid rgba(212, 175, 55, 0.1);
+    border-radius: 0.5rem;
+    padding: 0.25rem;
+  }
+
+  .period-btn {
+    padding: 0.5rem 1rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: rgba(245, 245, 245, 0.5);
+    border-radius: 0.375rem;
+    transition: all 0.2s ease;
+  }
+
+  .period-btn:hover {
+    color: var(--admin-cream);
+  }
+
+  .period-btn.active {
+    background: rgba(212, 175, 55, 0.15);
+    color: var(--gold);
+  }
+
+  /* Metric Cards */
+  .metric-card {
+    position: relative;
+    background: var(--admin-card);
+    border: 1px solid rgba(212, 175, 55, 0.08);
+    border-radius: 1rem;
+    padding: 1.25rem;
+    overflow: hidden;
+    transition: all 0.3s ease;
+  }
+
+  .metric-card:hover {
+    border-color: rgba(212, 175, 55, 0.2);
+    transform: translateY(-2px);
+  }
+
+  .metric-icon {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 0.625rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 0.75rem;
+  }
+
+  .metric-value {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.75rem;
+    font-weight: 600;
+    line-height: 1;
+    margin-bottom: 0.25rem;
+  }
+
+  .metric-label {
+    font-size: 0.8rem;
+    color: rgba(245, 245, 245, 0.5);
+  }
+
+  .metric-detail {
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid rgba(212, 175, 55, 0.05);
+    font-size: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  /* Chart Cards */
+  .chart-card {
+    background: var(--admin-card);
+    border: 1px solid rgba(212, 175, 55, 0.08);
+    border-radius: 1rem;
+    padding: 1.5rem;
+  }
+
+  .chart-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+  }
+
+  .chart-badge {
+    padding: 0.375rem 0.75rem;
+    background: rgba(212, 175, 55, 0.1);
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--gold);
+  }
+
+  .chart-area {
+    height: 180px;
+  }
+
+  /* Area Chart */
+  .area-chart {
+    display: flex;
+    align-items: flex-end;
+    height: 100%;
+    gap: 2px;
+  }
+
+  .area-bar-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100%;
+    min-width: 0;
+  }
+
+  .area-bar {
+    width: 100%;
+    height: calc(100% - 1.5rem);
+    display: flex;
+    align-items: flex-end;
+  }
+
+  .bar-fill {
+    position: relative;
+    width: 100%;
+    border-radius: 2px 2px 0 0;
+    transition: all 0.3s ease;
+    cursor: pointer;
+  }
+
+  .bar-fill:hover {
+    opacity: 0.85;
+    transform: scaleY(1.02);
+    transform-origin: bottom;
+  }
+
+  .bar-tooltip {
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 0.375rem 0.625rem;
+    background: rgba(10, 10, 10, 0.95);
+    border: 1px solid rgba(212, 175, 55, 0.2);
+    border-radius: 0.375rem;
+    font-size: 0.65rem;
+    color: var(--admin-cream);
+    text-align: center;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+    z-index: 10;
+    line-height: 1.4;
+  }
+
+  .bar-fill:hover .bar-tooltip {
+    opacity: 1;
+  }
+
+  .area-label {
+    margin-top: 0.5rem;
+    font-size: 0.6rem;
+    color: rgba(245, 245, 245, 0.3);
+    white-space: nowrap;
+  }
+
+  /* Breakdown Cards */
+  .breakdown-card {
+    background: var(--admin-card);
+    border: 1px solid rgba(212, 175, 55, 0.08);
+    border-radius: 1rem;
+    padding: 1.5rem;
+  }
+
+  .breakdown-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.25rem;
+  }
+
+  .breakdown-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.875rem;
+  }
+
+  .breakdown-item {
+    display: grid;
+    grid-template-columns: auto 1fr auto auto;
+    gap: 0.75rem;
+    align-items: center;
+  }
+
+  .breakdown-rank {
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 0.375rem;
+    background: rgba(212, 175, 55, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: var(--gold);
+  }
+
+  .breakdown-rank[data-rank="1"] {
+    background: linear-gradient(135deg, var(--gold) 0%, #B8962E 100%);
+    color: var(--admin-black);
+  }
+
+  .breakdown-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    min-width: 0;
+  }
+
+  .breakdown-name {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--admin-cream);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .breakdown-stat {
+    font-size: 0.65rem;
+    color: rgba(245, 245, 245, 0.4);
+  }
+
+  .breakdown-bar-container {
+    width: 60px;
+    height: 0.375rem;
+    background: rgba(212, 175, 55, 0.1);
+    border-radius: 9999px;
+    overflow: hidden;
+  }
+
+  .breakdown-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--gold) 0%, #B8962E 100%);
+    border-radius: 9999px;
+    transition: width 0.5s ease;
+  }
+
+  .breakdown-bar.occasion {
+    background: linear-gradient(90deg, #a855f7 0%, #8b5cf6 100%);
+  }
+
+  .breakdown-revenue {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.125rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  /* Status Distribution */
+  .status-distribution {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.25rem;
+  }
+
+  .status-donut {
+    position: relative;
+    width: 140px;
+    height: 140px;
+  }
+
+  .donut-chart {
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+  }
+
+  .donut-segment {
+    transition: all 0.3s ease;
+  }
+
+  .donut-segment:hover {
+    stroke-width: 4;
+  }
+
+  .donut-center {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .donut-value {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--admin-cream);
+  }
+
+  .donut-label {
+    font-size: 0.65rem;
+    color: rgba(245, 245, 245, 0.4);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .status-legend {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem 1rem;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+  }
+
+  .legend-dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 9999px;
+  }
+
+  .legend-name {
+    font-size: 0.7rem;
+    color: rgba(245, 245, 245, 0.6);
+  }
+
+  .legend-count {
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: var(--admin-cream);
+  }
+
+  /* Performance Card */
+  .performance-card {
+    background: var(--admin-card);
+    border: 1px solid rgba(212, 175, 55, 0.08);
+    border-radius: 1rem;
+    overflow: hidden;
+  }
+
+  .performance-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.5rem;
+    border-bottom: 1px solid rgba(212, 175, 55, 0.05);
+  }
+
+  .performance-table {
+    padding: 0 1rem;
+  }
+
+  .performance-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr;
+    gap: 1rem;
+    padding: 0.875rem 0.5rem;
+    border-bottom: 1px solid rgba(212, 175, 55, 0.05);
+    align-items: center;
+  }
+
+  .performance-row.header {
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: rgba(245, 245, 245, 0.3);
+  }
+
+  .performance-row:last-child {
+    border-bottom: none;
+  }
+
+  .performance-name {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    font-size: 0.875rem;
+    color: var(--admin-cream);
+    font-weight: 500;
+  }
+
+  .rank-badge {
+    width: 1.25rem;
+    height: 1.25rem;
+    border-radius: 0.25rem;
+    background: rgba(212, 175, 55, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.6rem;
+    font-weight: 700;
+    color: var(--gold);
+  }
+
+  .performance-row[data-rank="1"] .rank-badge {
+    background: linear-gradient(135deg, var(--gold) 0%, #B8962E 100%);
+    color: var(--admin-black);
+  }
+
+  .performance-orders,
+  .performance-revenue,
+  .performance-days {
+    font-size: 0.8rem;
+    text-align: center;
+  }
+
+  .performance-orders {
+    color: rgba(245, 245, 245, 0.6);
+  }
+
+  .performance-revenue {
+    color: #10b981;
+    font-weight: 600;
+  }
+
+  .performance-empty {
+    padding: 2rem;
+    text-align: center;
+  }
+
+  /* Color utilities */
+  .text-gold { color: var(--gold); }
+  .text-admin-cream { color: var(--admin-cream); }
+  .bg-gold { background-color: var(--gold); }
+
+  /* Responsive */
+  @media (max-width: 640px) {
+    .metric-value {
+      font-size: 1.5rem;
+    }
+
+    .chart-area {
+      height: 140px;
+    }
+
+    .breakdown-item {
+      grid-template-columns: auto 1fr auto;
+    }
+
+    .breakdown-bar-container {
+      display: none;
+    }
+  }
+</style>
+
+<script>
+  // Period selector functionality
+  const periodBtns = document.querySelectorAll('.period-btn');
+
+  periodBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const period = btn.getAttribute('data-period');
+
+      // Update active state
+      periodBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      // Reload page with period parameter
+      const url = new URL(window.location.href);
+      url.searchParams.set('period', period || '30');
+      window.location.href = url.toString();
+    });
+  });
+
+  // Set active period from URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const currentPeriod = urlParams.get('period') || '30';
+  periodBtns.forEach(btn => {
+    if (btn.getAttribute('data-period') === currentPeriod) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
+</script>

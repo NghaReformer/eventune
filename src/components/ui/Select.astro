@@ -1,0 +1,110 @@
+---
+/**
+ * Select Component
+ * Dropdown select with custom styling
+ */
+
+interface Option {
+  value: string;
+  label: string;
+  disabled?: boolean;
+}
+
+interface Props {
+  name: string;
+  options: Option[];
+  label?: string;
+  placeholder?: string;
+  value?: string;
+  required?: boolean;
+  disabled?: boolean;
+  error?: string;
+  hint?: string;
+  class?: string;
+  id?: string;
+}
+
+const {
+  name,
+  options,
+  label,
+  placeholder,
+  value = '',
+  required = false,
+  disabled = false,
+  error,
+  hint,
+  class: className = '',
+  id = name,
+} = Astro.props;
+
+const selectStyles = `
+  w-full px-4 py-3
+  bg-primary-cardBlack text-text-primary
+  border rounded-lg
+  appearance-none
+  cursor-pointer
+  focus:outline-none focus:ring-2 focus:ring-accent-gold focus:border-transparent
+  disabled:opacity-50 disabled:cursor-not-allowed
+  transition-colors duration-200
+  ${error ? 'border-status-error' : 'border-text-muted hover:border-text-secondary'}
+  ${className}
+`.trim();
+---
+
+<div class="space-y-1.5">
+  {label && (
+    <label for={id} class="block text-sm font-medium text-text-primary">
+      {label}
+      {required && <span class="text-status-error ml-1">*</span>}
+    </label>
+  )}
+
+  <div class="relative">
+    <select
+      id={id}
+      name={name}
+      required={required}
+      disabled={disabled}
+      class={selectStyles}
+      aria-invalid={error ? 'true' : 'false'}
+      aria-describedby={error ? `${id}-error` : hint ? `${id}-hint` : undefined}
+    >
+      {placeholder && (
+        <option value="" disabled selected={!value}>
+          {placeholder}
+        </option>
+      )}
+      {options.map((option) => (
+        <option
+          value={option.value}
+          selected={option.value === value}
+          disabled={option.disabled}
+        >
+          {option.label}
+        </option>
+      ))}
+    </select>
+
+    <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+      <svg class="w-5 h-5 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+      </svg>
+    </div>
+  </div>
+
+  {error && (
+    <p id={`${id}-error`} class="text-sm text-status-error flex items-center gap-1">
+      <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+      </svg>
+      {error}
+    </p>
+  )}
+
+  {hint && !error && (
+    <p id={`${id}-hint`} class="text-sm text-text-muted">
+      {hint}
+    </p>
+  )}
+</div>

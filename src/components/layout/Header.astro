@@ -1,0 +1,203 @@
+---
+/**
+ * Header Component
+ * Main navigation with mobile menu toggle
+ */
+
+import { brandConfig, siteConfig } from '../../config';
+
+interface Props {
+  currentPath?: string;
+}
+
+const { currentPath = Astro.url.pathname } = Astro.props;
+
+const navLinks = [
+  { href: '/services', label: 'Services' },
+  { href: '/samples', label: 'Samples' },
+  { href: '/about', label: 'About' },
+  { href: '/contact', label: 'Contact' },
+];
+
+const isActive = (href: string) => {
+  if (href === '/') return currentPath === '/';
+  return currentPath.startsWith(href);
+};
+---
+
+<header class="sticky top-0 z-50 bg-primary-black/95 backdrop-blur-sm border-b border-text-muted/20">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="flex items-center justify-between h-16 md:h-20">
+      <!-- Logo -->
+      <a href="/" class="flex items-center gap-2 group">
+        <span class="font-heading text-xl md:text-2xl font-bold text-accent-gold group-hover:text-accent-goldHover transition-colors">
+          Eventune
+        </span>
+        <span class="hidden sm:inline font-heading text-xl md:text-2xl font-bold text-text-primary">
+          Studios
+        </span>
+      </a>
+
+      <!-- Navigation - Desktop -->
+      <nav class="hidden md:flex items-center gap-8">
+        {navLinks.map((link) => (
+          <a
+            href={link.href}
+            class={`text-sm font-medium transition-colors hover:text-accent-gold ${
+              isActive(link.href) ? 'text-accent-gold' : 'text-text-secondary'
+            }`}
+          >
+            {link.label}
+          </a>
+        ))}
+      </nav>
+
+      <!-- CTA & Actions -->
+      <div class="flex items-center gap-4">
+        <!-- Auth Links - Desktop -->
+        <a
+          href="/auth/login"
+          class="hidden md:inline text-sm text-text-secondary hover:text-accent-gold transition-colors"
+        >
+          Login
+        </a>
+
+        <!-- Order CTA -->
+        <a
+          href="/order/wedding"
+          class="hidden sm:inline-flex items-center gap-2 px-4 py-2 bg-accent-gold text-primary-black text-sm font-medium rounded-lg hover:bg-accent-goldHover transition-colors"
+        >
+          Order Now
+        </a>
+
+        <!-- Mobile Menu Toggle -->
+        <button
+          type="button"
+          class="md:hidden p-2 text-text-secondary hover:text-accent-gold transition-colors"
+          aria-label="Open menu"
+          data-mobile-menu-toggle
+        >
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- Mobile Menu Overlay -->
+<div
+  class="fixed inset-0 z-50 bg-black/70 opacity-0 invisible transition-all duration-300"
+  data-mobile-menu-overlay
+>
+</div>
+
+<!-- Mobile Menu Drawer -->
+<div
+  class="fixed top-0 right-0 z-50 w-80 max-w-full h-full bg-primary-cardBlack transform translate-x-full transition-transform duration-300"
+  data-mobile-menu-drawer
+>
+  <div class="flex flex-col h-full">
+    <!-- Header -->
+    <div class="flex items-center justify-between p-4 border-b border-text-muted/20">
+      <span class="font-heading text-lg font-bold text-accent-gold">Menu</span>
+      <button
+        type="button"
+        class="p-2 text-text-secondary hover:text-accent-gold transition-colors"
+        aria-label="Close menu"
+        data-mobile-menu-close
+      >
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="flex-1 py-4 overflow-y-auto">
+      <ul class="space-y-1 px-2">
+        {navLinks.map((link) => (
+          <li>
+            <a
+              href={link.href}
+              class={`block px-4 py-3 rounded-lg text-base font-medium transition-colors ${
+                isActive(link.href)
+                  ? 'bg-accent-gold/10 text-accent-gold'
+                  : 'text-text-primary hover:bg-primary-hoverBlack'
+              }`}
+            >
+              {link.label}
+            </a>
+          </li>
+        ))}
+      </ul>
+
+      <div class="mt-4 pt-4 border-t border-text-muted/20 px-2">
+        <ul class="space-y-1">
+          <li>
+            <a
+              href="/auth/login"
+              class="block px-4 py-3 rounded-lg text-base text-text-secondary hover:bg-primary-hoverBlack transition-colors"
+            >
+              Login
+            </a>
+          </li>
+          <li>
+            <a
+              href="/auth/signup"
+              class="block px-4 py-3 rounded-lg text-base text-text-secondary hover:bg-primary-hoverBlack transition-colors"
+            >
+              Sign Up
+            </a>
+          </li>
+        </ul>
+      </div>
+    </nav>
+
+    <!-- CTA -->
+    <div class="p-4 border-t border-text-muted/20">
+      <a
+        href="/order/wedding"
+        class="block w-full px-6 py-3 bg-accent-gold text-primary-black text-center font-medium rounded-lg hover:bg-accent-goldHover transition-colors"
+      >
+        Order Your Song
+      </a>
+    </div>
+  </div>
+</div>
+
+<script>
+  const toggleBtn = document.querySelector('[data-mobile-menu-toggle]');
+  const closeBtn = document.querySelector('[data-mobile-menu-close]');
+  const overlay = document.querySelector('[data-mobile-menu-overlay]');
+  const drawer = document.querySelector('[data-mobile-menu-drawer]');
+
+  function openMenu() {
+    overlay?.classList.remove('opacity-0', 'invisible');
+    overlay?.classList.add('opacity-100', 'visible');
+    drawer?.classList.remove('translate-x-full');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeMenu() {
+    overlay?.classList.add('opacity-0', 'invisible');
+    overlay?.classList.remove('opacity-100', 'visible');
+    drawer?.classList.add('translate-x-full');
+    document.body.style.overflow = '';
+  }
+
+  toggleBtn?.addEventListener('click', openMenu);
+  closeBtn?.addEventListener('click', closeMenu);
+  overlay?.addEventListener('click', closeMenu);
+
+  // Close on escape
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeMenu();
+  });
+
+  // Close on navigation
+  drawer?.querySelectorAll('a').forEach((link) => {
+    link.addEventListener('click', closeMenu);
+  });
+</script>

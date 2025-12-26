@@ -1,0 +1,118 @@
+---
+/**
+ * Textarea Component
+ * Multi-line text input with character count
+ */
+
+interface Props {
+  name: string;
+  label?: string;
+  placeholder?: string;
+  value?: string;
+  required?: boolean;
+  disabled?: boolean;
+  readonly?: boolean;
+  error?: string;
+  hint?: string;
+  rows?: number;
+  minlength?: number;
+  maxlength?: number;
+  showCount?: boolean;
+  class?: string;
+  id?: string;
+}
+
+const {
+  name,
+  label,
+  placeholder,
+  value = '',
+  required = false,
+  disabled = false,
+  readonly = false,
+  error,
+  hint,
+  rows = 4,
+  minlength,
+  maxlength,
+  showCount = false,
+  class: className = '',
+  id = name,
+} = Astro.props;
+
+const textareaStyles = `
+  w-full px-4 py-3
+  bg-primary-cardBlack text-text-primary
+  border rounded-lg
+  placeholder:text-text-muted
+  focus:outline-none focus:ring-2 focus:ring-accent-gold focus:border-transparent
+  disabled:opacity-50 disabled:cursor-not-allowed
+  transition-colors duration-200
+  resize-y min-h-[100px]
+  ${error ? 'border-status-error' : 'border-text-muted hover:border-text-secondary'}
+  ${className}
+`.trim();
+---
+
+<div class="space-y-1.5">
+  {label && (
+    <label for={id} class="block text-sm font-medium text-text-primary">
+      {label}
+      {required && <span class="text-status-error ml-1">*</span>}
+    </label>
+  )}
+
+  <div class="relative">
+    <textarea
+      id={id}
+      name={name}
+      placeholder={placeholder}
+      required={required}
+      disabled={disabled}
+      readonly={readonly}
+      rows={rows}
+      minlength={minlength}
+      maxlength={maxlength}
+      class={textareaStyles}
+      aria-invalid={error ? 'true' : 'false'}
+      aria-describedby={error ? `${id}-error` : hint ? `${id}-hint` : undefined}
+    >{value}</textarea>
+
+    {showCount && maxlength && (
+      <div class="absolute bottom-2 right-2 text-xs text-text-muted" data-textarea-count={id}>
+        <span data-count>0</span>/{maxlength}
+      </div>
+    )}
+  </div>
+
+  {error && (
+    <p id={`${id}-error`} class="text-sm text-status-error flex items-center gap-1">
+      <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+      </svg>
+      {error}
+    </p>
+  )}
+
+  {hint && !error && (
+    <p id={`${id}-hint`} class="text-sm text-text-muted">
+      {hint}
+    </p>
+  )}
+</div>
+
+{showCount && maxlength && (
+  <script define:vars={{ id }}>
+    const textarea = document.getElementById(id);
+    const countEl = document.querySelector(`[data-textarea-count="${id}"] [data-count]`);
+
+    if (textarea && countEl) {
+      const updateCount = () => {
+        countEl.textContent = textarea.value.length;
+      };
+
+      textarea.addEventListener('input', updateCount);
+      updateCount();
+    }
+  </script>
+)}
