@@ -1,7 +1,7 @@
 ---
 /**
  * Services Page
- * Detailed pricing cards with package comparison
+ * Product-based pricing with song tiers, video add-ons, and bundles
  */
 
 import PublicLayout from '@/layouts/PublicLayout.astro';
@@ -10,118 +10,54 @@ import Badge from '@/components/ui/Badge.astro';
 import { siteConfig } from '@/config';
 import {
   getPackages,
+  getVideoProducts,
+  getAddonsByCategory,
+  getBundles,
   type Package,
+  type VideoProduct,
+  type Addon,
+  type Bundle,
 } from '@/services/config.service';
 
-// Fetch packages from config service
+// Fetch all pricing data
 let packages: Package[] = [];
+let videoProducts: VideoProduct[] = [];
+let deliveryAddons: Addon[] = [];
+let revisionAddons: Addon[] = [];
+let licenseAddons: Addon[] = [];
+let extraAddons: Addon[] = [];
+let physicalAddons: Addon[] = [];
+let bundles: Bundle[] = [];
 
 try {
-  packages = await getPackages();
+  [packages, videoProducts, deliveryAddons, revisionAddons, licenseAddons, extraAddons, physicalAddons, bundles] =
+    await Promise.all([
+      getPackages(),
+      getVideoProducts(),
+      getAddonsByCategory('delivery'),
+      getAddonsByCategory('revision'),
+      getAddonsByCategory('license'),
+      getAddonsByCategory('extra'),
+      getAddonsByCategory('physical'),
+      getBundles(),
+    ]);
 } catch (error) {
-  console.error('Error fetching packages:', error);
-  // Fallback data for development
-  packages = [
-    {
-      id: '1',
-      slug: 'express',
-      name: 'Express',
-      description: 'Quick turnaround for time-sensitive celebrations. Perfect when you need a beautiful song fast.',
-      price_usd: 149,
-      price_xaf: 75000,
-      song_length_min: 60,
-      song_length_max: 90,
-      includes_discovery_call: false,
-      revision_count: 1,
-      includes_instrumental: false,
-      includes_full_rights: false,
-      delivery_days_min: 5,
-      delivery_days_max: 7,
-      display_order: 1,
-      is_popular: false,
-      is_active: true,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    {
-      id: '2',
-      slug: 'classic',
-      name: 'Classic',
-      description: 'Our most popular package. Includes a discovery call to capture every detail of your story.',
-      price_usd: 299,
-      price_xaf: 150000,
-      song_length_min: 120,
-      song_length_max: 180,
-      includes_discovery_call: true,
-      revision_count: 2,
-      includes_instrumental: false,
-      includes_full_rights: false,
-      delivery_days_min: 7,
-      delivery_days_max: 10,
-      display_order: 2,
-      is_popular: true,
-      is_active: true,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    {
-      id: '3',
-      slug: 'signature',
-      name: 'Signature',
-      description: 'Premium production with instrumental track included. Perfect for events where you want the full experience.',
-      price_usd: 499,
-      price_xaf: 250000,
-      song_length_min: 180,
-      song_length_max: 240,
-      includes_discovery_call: true,
-      revision_count: 3,
-      includes_instrumental: true,
-      includes_full_rights: false,
-      delivery_days_min: 10,
-      delivery_days_max: 14,
-      display_order: 3,
-      is_popular: false,
-      is_active: true,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    {
-      id: '4',
-      slug: 'legacy',
-      name: 'Legacy',
-      description: 'The ultimate package with full ownership rights. Your song, forever yours to use commercially.',
-      price_usd: 799,
-      price_xaf: 400000,
-      song_length_min: 240,
-      song_length_max: 300,
-      includes_discovery_call: true,
-      revision_count: 5,
-      includes_instrumental: true,
-      includes_full_rights: true,
-      delivery_days_min: 14,
-      delivery_days_max: 21,
-      display_order: 4,
-      is_popular: false,
-      is_active: true,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-  ] as Package[];
+  console.error('Error fetching pricing data:', error);
 }
 
-// Format song length
+// Format song length (now in minutes as decimals)
 const formatSongLength = (min: number, max: number) => {
-  const minMinutes = Math.floor(min / 60);
-  const maxMinutes = Math.floor(max / 60);
-  const minSecs = min % 60;
-  const maxSecs = max % 60;
-
-  const formatTime = (mins: number, secs: number) => {
+  const formatTime = (minutes: number) => {
+    if (minutes < 1) {
+      return `${Math.round(minutes * 60)}s`;
+    }
+    const mins = Math.floor(minutes);
+    const secs = Math.round((minutes - mins) * 60);
     if (secs === 0) return `${mins}:00`;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  return `${formatTime(minMinutes, minSecs)} - ${formatTime(maxMinutes, maxSecs)}`;
+  return `${formatTime(min)} - ${formatTime(max)}`;
 };
 
 // Format delivery time
@@ -130,21 +66,19 @@ const formatDelivery = (min: number, max: number) => {
   return `${min}-${max} days`;
 };
 
-// Feature comparison data
-const features = [
-  { name: 'Song Length', key: 'length' },
-  { name: 'Delivery Time', key: 'delivery' },
-  { name: 'Revisions', key: 'revisions' },
-  { name: 'Discovery Call', key: 'discovery' },
-  { name: 'Instrumental Track', key: 'instrumental' },
-  { name: 'Full Ownership Rights', key: 'rights' },
-  { name: 'Commercial Use', key: 'commercial' },
-];
+// Helper to format price
+const formatPrice = (price: number, currency: 'USD' | 'XAF') => {
+  if (currency === 'USD') {
+    return `$${price}`;
+  } else {
+    return `${price.toLocaleString()} CFA`;
+  }
+};
 ---
 
 <PublicLayout
   title="Services & Pricing | Eventune Studios"
-  description="Choose the perfect package for your custom song. From express delivery to premium productions with full rights ownership."
+  description="Choose the perfect song tier and add-ons for your custom song. From quick tunes to epic productions with full rights ownership."
 >
   <!-- Hero Section -->
   <section class="py-16 md:py-24 bg-primary-cardBlack">
@@ -153,16 +87,15 @@ const features = [
         Services & Pricing
       </h1>
       <p class="text-lg text-text-secondary max-w-2xl mx-auto">
-        Every celebration deserves a song that tells your story. Choose the package that fits your needs.
+        Build your perfect custom song package with flexible pricing. Start with a song tier, then add videos, licenses, and more.
       </p>
     </div>
   </section>
 
-  <!-- Pricing Cards -->
-  <section class="py-16 md:py-24">
+  <!-- Currency Toggle -->
+  <section class="py-8 border-b border-text-muted/20">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <!-- Currency Toggle -->
-      <div class="flex justify-center mb-12">
+      <div class="flex justify-center">
         <div class="inline-flex items-center gap-2 p-1 bg-primary-cardBlack rounded-lg" id="currency-toggle">
           <button
             type="button"
@@ -180,8 +113,21 @@ const features = [
           </button>
         </div>
       </div>
+    </div>
+  </section>
 
-      <!-- Package Cards -->
+  <!-- Song Tiers -->
+  <section class="py-16 md:py-24">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-12">
+        <h2 class="text-3xl md:text-4xl font-heading font-bold text-text-primary mb-4">
+          Song Tiers
+        </h2>
+        <p class="text-lg text-text-secondary">
+          Choose your base song tier, then customize with add-ons below.
+        </p>
+      </div>
+
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8">
         {packages.map((pkg) => (
           <Card
@@ -248,14 +194,6 @@ const features = [
                     <span class="text-text-secondary">Instrumental track included</span>
                   </li>
                 )}
-                {pkg.includes_full_rights && (
-                  <li class="flex items-start gap-3">
-                    <svg class="w-5 h-5 text-accent-gold mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                      <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-                    </svg>
-                    <span class="text-text-secondary">Full ownership rights</span>
-                  </li>
-                )}
               </ul>
             </div>
 
@@ -276,216 +214,174 @@ const features = [
     </div>
   </section>
 
-  <!-- Feature Comparison Table -->
-  <section class="py-16 md:py-24 bg-primary-cardBlack">
-    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div class="text-center mb-12">
-        <h2 class="text-3xl md:text-4xl font-heading font-bold text-text-primary mb-4">
-          Compare Packages
-        </h2>
-        <p class="text-lg text-text-secondary">
-          See all features side by side to make the best choice for your needs.
-        </p>
-      </div>
+  <!-- Video Add-ons -->
+  {videoProducts.length > 0 && (
+    <section class="py-16 md:py-24 bg-primary-cardBlack">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="text-center mb-12">
+          <h2 class="text-3xl md:text-4xl font-heading font-bold text-text-primary mb-4">
+            Video Add-ons
+          </h2>
+          <p class="text-lg text-text-secondary">
+            Bring your song to life with a professional video.
+          </p>
+        </div>
 
-      <div class="overflow-x-auto">
-        <table class="w-full">
-          <thead>
-            <tr class="border-b border-text-muted/30">
-              <th class="py-4 px-4 text-left text-text-primary font-heading font-semibold">Feature</th>
-              {packages.map((pkg) => (
-                <th class="py-4 px-4 text-center">
-                  <span class={`font-heading font-semibold ${pkg.is_popular ? 'text-accent-gold' : 'text-text-primary'}`}>
-                    {pkg.name}
-                  </span>
-                  {pkg.is_popular && (
-                    <span class="block text-xs text-accent-gold mt-1">Most Popular</span>
-                  )}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            <!-- Price Row -->
-            <tr class="border-b border-text-muted/20">
-              <td class="py-4 px-4 text-text-secondary">Price (USD)</td>
-              {packages.map((pkg) => (
-                <td class="py-4 px-4 text-center">
-                  <span class="text-accent-gold font-bold">${pkg.price_usd}</span>
-                </td>
-              ))}
-            </tr>
-            <tr class="border-b border-text-muted/20">
-              <td class="py-4 px-4 text-text-secondary">Price (XAF)</td>
-              {packages.map((pkg) => (
-                <td class="py-4 px-4 text-center">
-                  <span class="text-accent-gold font-bold">{pkg.price_xaf.toLocaleString()} CFA</span>
-                </td>
-              ))}
-            </tr>
-            <!-- Song Length -->
-            <tr class="border-b border-text-muted/20">
-              <td class="py-4 px-4 text-text-secondary">Song Length</td>
-              {packages.map((pkg) => (
-                <td class="py-4 px-4 text-center text-text-primary">
-                  {formatSongLength(pkg.song_length_min, pkg.song_length_max)}
-                </td>
-              ))}
-            </tr>
-            <!-- Delivery -->
-            <tr class="border-b border-text-muted/20">
-              <td class="py-4 px-4 text-text-secondary">Delivery Time</td>
-              {packages.map((pkg) => (
-                <td class="py-4 px-4 text-center text-text-primary">
-                  {formatDelivery(pkg.delivery_days_min, pkg.delivery_days_max)}
-                </td>
-              ))}
-            </tr>
-            <!-- Revisions -->
-            <tr class="border-b border-text-muted/20">
-              <td class="py-4 px-4 text-text-secondary">Revisions</td>
-              {packages.map((pkg) => (
-                <td class="py-4 px-4 text-center text-text-primary">{pkg.revision_count}</td>
-              ))}
-            </tr>
-            <!-- Discovery Call -->
-            <tr class="border-b border-text-muted/20">
-              <td class="py-4 px-4 text-text-secondary">Discovery Call</td>
-              {packages.map((pkg) => (
-                <td class="py-4 px-4 text-center">
-                  {pkg.includes_discovery_call ? (
-                    <svg class="w-5 h-5 text-accent-gold mx-auto" fill="currentColor" viewBox="0 0 20 20">
-                      <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-                    </svg>
-                  ) : (
-                    <svg class="w-5 h-5 text-text-muted mx-auto" fill="currentColor" viewBox="0 0 20 20">
-                      <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
-                    </svg>
-                  )}
-                </td>
-              ))}
-            </tr>
-            <!-- Instrumental Track -->
-            <tr class="border-b border-text-muted/20">
-              <td class="py-4 px-4 text-text-secondary">Instrumental Track</td>
-              {packages.map((pkg) => (
-                <td class="py-4 px-4 text-center">
-                  {pkg.includes_instrumental ? (
-                    <svg class="w-5 h-5 text-accent-gold mx-auto" fill="currentColor" viewBox="0 0 20 20">
-                      <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-                    </svg>
-                  ) : (
-                    <svg class="w-5 h-5 text-text-muted mx-auto" fill="currentColor" viewBox="0 0 20 20">
-                      <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
-                    </svg>
-                  )}
-                </td>
-              ))}
-            </tr>
-            <!-- Full Rights -->
-            <tr class="border-b border-text-muted/20">
-              <td class="py-4 px-4 text-text-secondary">Full Ownership Rights</td>
-              {packages.map((pkg) => (
-                <td class="py-4 px-4 text-center">
-                  {pkg.includes_full_rights ? (
-                    <svg class="w-5 h-5 text-accent-gold mx-auto" fill="currentColor" viewBox="0 0 20 20">
-                      <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-                    </svg>
-                  ) : (
-                    <svg class="w-5 h-5 text-text-muted mx-auto" fill="currentColor" viewBox="0 0 20 20">
-                      <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
-                    </svg>
-                  )}
-                </td>
-              ))}
-            </tr>
-          </tbody>
-        </table>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {videoProducts.map((video) => (
+            <Card variant="default">
+              <div class="flex justify-between items-start mb-3">
+                <h3 class="text-xl font-heading font-semibold text-text-primary">{video.name}</h3>
+                <Badge variant={video.category === 'lyric_video' ? 'default' : 'gold'}>
+                  {video.category === 'lyric_video' ? 'Lyric' : 'Music'}
+                </Badge>
+              </div>
+              <p class="text-text-secondary text-sm mb-4">{video.description}</p>
+              <div class="flex justify-between items-center">
+                <div class="price-display" data-usd={video.price_usd} data-xaf={video.price_xaf}>
+                  <span class="text-2xl font-bold text-accent-gold price-value">${video.price_usd}</span>
+                  <span class="text-text-muted text-xs ml-1 price-currency">USD</span>
+                </div>
+                <span class="text-text-muted text-sm">+{video.delivery_days_additional} days</span>
+              </div>
+            </Card>
+          ))}
+        </div>
       </div>
-    </div>
-  </section>
+    </section>
+  )}
 
-  <!-- What's Included Section -->
+  <!-- Other Add-ons -->
   <section class="py-16 md:py-24">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="text-center mb-12">
         <h2 class="text-3xl md:text-4xl font-heading font-bold text-text-primary mb-4">
-          What's Included in Every Package
+          Customize Your Order
         </h2>
-        <p class="text-lg text-text-secondary max-w-2xl mx-auto">
-          All packages include our core features that make every song special.
+        <p class="text-lg text-text-secondary">
+          Add extra features to make your song perfect.
         </p>
       </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {[
-          {
-            icon: '🎵',
-            title: 'Professional Production',
-            description: 'Studio-quality recording and mixing by experienced producers.',
-          },
-          {
-            icon: '✍️',
-            title: 'Custom Lyrics',
-            description: 'Original lyrics written specifically for your story and occasion.',
-          },
-          {
-            icon: '🎤',
-            title: 'Professional Vocalist',
-            description: 'Performed by talented vocalists who bring your song to life.',
-          },
-          {
-            icon: '📱',
-            title: 'Digital Delivery',
-            description: 'High-quality MP3 and WAV files delivered to your inbox.',
-          },
-          {
-            icon: '💝',
-            title: 'Personal License',
-            description: 'Use your song at events, share with family and friends.',
-          },
-          {
-            icon: '🔒',
-            title: 'Secure Process',
-            description: 'Your story and personal details are kept completely confidential.',
-          },
-        ].map((feature) => (
-          <Card variant="default" class="text-center">
-            <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-accent-gold/10 flex items-center justify-center">
-              <span class="text-2xl">{feature.icon}</span>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <!-- Delivery Add-ons -->
+        {deliveryAddons.map((addon) => (
+          <Card variant="default">
+            <h4 class="text-lg font-heading font-semibold text-text-primary mb-2">{addon.name}</h4>
+            <p class="text-text-secondary text-sm mb-4">{addon.description}</p>
+            <div class="price-display" data-usd={addon.price_usd} data-xaf={addon.price_xaf} data-percentage={addon.percentage}>
+              {addon.price_type === 'fixed' ? (
+                <span class="text-xl font-bold text-accent-gold price-value">${addon.price_usd}</span>
+              ) : (
+                <span class="text-xl font-bold text-accent-gold">+{addon.percentage}%</span>
+              )}
             </div>
-            <h3 class="text-xl font-heading font-semibold text-text-primary mb-2">
-              {feature.title}
-            </h3>
-            <p class="text-text-secondary">{feature.description}</p>
+          </Card>
+        ))}
+
+        <!-- Revision Add-ons -->
+        {revisionAddons.map((addon) => (
+          <Card variant="default">
+            <h4 class="text-lg font-heading font-semibold text-text-primary mb-2">{addon.name}</h4>
+            <p class="text-text-secondary text-sm mb-4">{addon.description}</p>
+            <div class="price-display" data-usd={addon.price_usd} data-xaf={addon.price_xaf}>
+              <span class="text-xl font-bold text-accent-gold price-value">${addon.price_usd}</span>
+            </div>
+          </Card>
+        ))}
+
+        <!-- Extra Features -->
+        {extraAddons.map((addon) => (
+          <Card variant="default">
+            <h4 class="text-lg font-heading font-semibold text-text-primary mb-2">{addon.name}</h4>
+            <p class="text-text-secondary text-sm mb-4">{addon.description}</p>
+            <div class="price-display" data-usd={addon.price_usd} data-xaf={addon.price_xaf}>
+              <span class="text-xl font-bold text-accent-gold price-value">${addon.price_usd}</span>
+            </div>
+          </Card>
+        ))}
+
+        <!-- License Add-ons -->
+        {licenseAddons.map((addon) => (
+          <Card variant="default">
+            <h4 class="text-lg font-heading font-semibold text-text-primary mb-2">{addon.name}</h4>
+            <p class="text-text-secondary text-sm mb-4">{addon.description}</p>
+            <div class="price-display" data-usd={addon.price_usd} data-xaf={addon.price_xaf}>
+              <span class="text-xl font-bold text-accent-gold price-value">${addon.price_usd}</span>
+            </div>
+          </Card>
+        ))}
+
+        <!-- Physical Products -->
+        {physicalAddons.map((addon) => (
+          <Card variant="default">
+            <h4 class="text-lg font-heading font-semibold text-text-primary mb-2">{addon.name}</h4>
+            <p class="text-text-secondary text-sm mb-4">{addon.description}</p>
+            <div class="price-display" data-usd={addon.price_usd} data-xaf={addon.price_xaf}>
+              <span class="text-xl font-bold text-accent-gold price-value">${addon.price_usd}</span>
+            </div>
           </Card>
         ))}
       </div>
     </div>
   </section>
 
+  <!-- Bundles -->
+  {bundles.length > 0 && (
+    <section class="py-16 md:py-24 bg-primary-cardBlack">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="text-center mb-12">
+          <h2 class="text-3xl md:text-4xl font-heading font-bold text-text-primary mb-4">
+            Multi-Song Bundles
+          </h2>
+          <p class="text-lg text-text-secondary">
+            Save big when ordering multiple songs at once.
+          </p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+          {bundles.map((bundle) => (
+            <Card variant="elevated" class="text-center">
+              <div class="mb-4">
+                <h3 class="text-2xl font-heading font-bold text-text-primary mb-2">{bundle.name}</h3>
+                <p class="text-text-secondary text-sm">{bundle.description}</p>
+              </div>
+              <div class="mb-4">
+                <span class="text-5xl font-bold text-accent-gold">{bundle.discount_percentage}%</span>
+                <span class="block text-text-muted text-sm mt-2">OFF</span>
+              </div>
+              <div class="text-text-secondary">
+                <span class="text-3xl font-bold text-text-primary">{bundle.song_count}</span>
+                <span class="ml-2">Songs</span>
+              </div>
+            </Card>
+          ))}
+        </div>
+      </div>
+    </section>
+  )}
+
   <!-- CTA Section -->
-  <section class="py-16 md:py-24 bg-primary-cardBlack">
+  <section class="py-16 md:py-24">
     <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
       <h2 class="text-3xl md:text-4xl font-heading font-bold text-text-primary mb-4">
-        Not Sure Which Package?
+        Ready to Get Started?
       </h2>
       <p class="text-lg text-text-secondary mb-8">
-        We're here to help you choose the perfect option for your celebration.
-        Get in touch with our team for personalized guidance.
+        Choose your song tier and customize with add-ons during checkout.
       </p>
       <div class="flex flex-col sm:flex-row gap-4 justify-center">
         <a
-          href="/contact"
+          href="/order/wedding"
           class="inline-flex items-center justify-center px-8 py-4 bg-accent-gold text-primary-black text-lg font-medium rounded-lg hover:bg-accent-goldHover transition-colors"
         >
-          Contact Us
+          Order Now
         </a>
         <a
-          href="/samples"
+          href="/contact"
           class="inline-flex items-center justify-center px-8 py-4 border-2 border-text-muted text-text-primary text-lg font-medium rounded-lg hover:border-accent-gold hover:text-accent-gold transition-colors"
         >
-          Listen to Samples
+          Contact Us
         </a>
       </div>
     </div>
@@ -509,6 +405,10 @@ const features = [
       priceDisplays.forEach((display) => {
         const priceValue = display.querySelector('.price-value');
         const priceCurrency = display.querySelector('.price-currency');
+        const percentage = display.getAttribute('data-percentage');
+
+        // Skip percentage-based pricing
+        if (percentage) return;
 
         if (currency === 'USD') {
           const usd = display.getAttribute('data-usd');

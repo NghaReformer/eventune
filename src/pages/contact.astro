@@ -10,6 +10,32 @@ import Input from '@/components/ui/Input.astro';
 import Textarea from '@/components/ui/Textarea.astro';
 import Button from '@/components/ui/Button.astro';
 import { siteConfig } from '@/config';
+import { getSiteSettings } from '@/services/admin.service';
+
+// Fetch contact settings from database
+const settings = await getSiteSettings();
+
+// Parse business hours if available
+let businessHours: Record<string, string> = {
+  weekdays: '9:00 AM - 6:00 PM (GMT+1)',
+  saturday: '10:00 AM - 4:00 PM (GMT+1)',
+  sunday: 'Closed',
+};
+
+if (settings.contact_business_hours) {
+  try {
+    const parsed = JSON.parse(settings.contact_business_hours);
+    businessHours = { ...businessHours, ...parsed };
+  } catch {
+    // Use defaults if parsing fails
+  }
+}
+
+// Get contact information with fallbacks
+const contactEmail = settings.contact_email || siteConfig.contact.email;
+const contactPhone = settings.contact_phone || '';
+const whatsappNumber = settings.whatsapp_number || siteConfig.social.whatsapp || '+237XXXXXXXXX';
+const instagramUrl = settings.social_instagram || siteConfig.social.instagram || '#';
 
 // Contact methods
 const contactMethods = [
@@ -17,22 +43,22 @@ const contactMethods = [
     icon: '📧',
     title: 'Email Us',
     description: 'Send us a message anytime',
-    value: siteConfig.contact.email,
-    href: `mailto:${siteConfig.contact.email}`,
+    value: contactEmail,
+    href: `mailto:${contactEmail}`,
   },
   {
     icon: '💬',
     title: 'WhatsApp',
     description: 'Chat with us directly',
-    value: siteConfig.contact.whatsapp || '+1 (555) 123-4567',
-    href: `https://wa.me/${(siteConfig.contact.whatsapp || '+15551234567').replace(/\D/g, '')}`,
+    value: whatsappNumber,
+    href: `https://wa.me/${whatsappNumber.replace(/\D/g, '')}`,
   },
   {
     icon: '📱',
     title: 'Social Media',
     description: 'Follow us for updates',
     value: '@eventunestudios',
-    href: siteConfig.social.instagram || '#',
+    href: instagramUrl,
   },
 ];
 
@@ -229,18 +255,26 @@ const contactFaqs = [
               Business Hours
             </h3>
             <div class="space-y-2 text-text-secondary">
-              <div class="flex justify-between">
-                <span>Monday - Friday</span>
-                <span class="text-text-primary">9:00 AM - 6:00 PM (GMT+1)</span>
-              </div>
-              <div class="flex justify-between">
-                <span>Saturday</span>
-                <span class="text-text-primary">10:00 AM - 4:00 PM (GMT+1)</span>
-              </div>
-              <div class="flex justify-between">
-                <span>Sunday</span>
-                <span class="text-text-muted">Closed</span>
-              </div>
+              {businessHours.weekdays && (
+                <div class="flex justify-between">
+                  <span>Monday - Friday</span>
+                  <span class="text-text-primary">{businessHours.weekdays}</span>
+                </div>
+              )}
+              {businessHours.saturday && (
+                <div class="flex justify-between">
+                  <span>Saturday</span>
+                  <span class="text-text-primary">{businessHours.saturday}</span>
+                </div>
+              )}
+              {businessHours.sunday && (
+                <div class="flex justify-between">
+                  <span>Sunday</span>
+                  <span class={businessHours.sunday.toLowerCase().includes('closed') ? 'text-text-muted' : 'text-text-primary'}>
+                    {businessHours.sunday}
+                  </span>
+                </div>
+              )}
             </div>
             <p class="mt-4 text-sm text-text-muted">
               We monitor messages outside business hours for urgent requests.
@@ -294,17 +328,17 @@ const contactFaqs = [
     }
 
     try {
-      // TODO: Replace with actual API endpoint
-      // const response = await fetch('/api/contact', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify(data),
-      // });
-      //
-      // if (!response.ok) throw new Error('Failed to send message');
+      const response = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
 
-      // Simulate API call for development
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to send message');
+      }
 
       // Show success message
       successMessage?.classList.remove('hidden');

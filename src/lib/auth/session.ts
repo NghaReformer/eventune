@@ -48,33 +48,30 @@ export async function getSession(cookies: AstroCookies): Promise<SessionResult> 
   }
 
   try {
-    const supabase = getServerClient();
+    // Use the same approach as middleware - create client with token in header
+    const { createServerClientWithToken } = await import('../supabase/server');
+    const supabase = createServerClientWithToken(accessToken);
 
-    // Validate session with Supabase
-    const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
-      access_token: accessToken,
-      refresh_token: refreshToken,
-    });
+    // Validate the token by getting the user
+    const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
 
-    if (sessionError || !sessionData?.user) {
-      // Clear invalid cookies
-      cookies.delete('sb-access-token', { path: '/' });
-      cookies.delete('sb-refresh-token', { path: '/' });
-
+    if (authError || !authUser) {
+      console.log('[getSession] Auth validation failed:', authError?.message);
       return {
         success: false,
         error: {
-          code: sessionError?.message?.includes('expired') ? 'SESSION_EXPIRED' : 'INVALID_SESSION',
-          message: sessionError?.message || 'Invalid session',
+          code: authError?.message?.includes('expired') ? 'SESSION_EXPIRED' : 'INVALID_SESSION',
+          message: authError?.message || 'Invalid session',
         },
       };
     }
 
-    // Fetch profile data
-    const { data: profileData, error: profileError } = await supabase
+    // Fetch profile data using service client for RLS bypass
+    const serverClient = getServerClient();
+    const { data: profileData, error: profileError } = await serverClient
       .from('profiles')
       .select('*')
-      .eq('id', sessionData.user.id)
+      .eq('id', authUser.id)
       .single();
 
     if (profileError && profileError.code !== 'PGRST116') {
@@ -85,9 +82,9 @@ export async function getSession(cookies: AstroCookies): Promise<SessionResult> 
       success: true,
       data: {
         user: {
-          id: sessionData.user.id,
-          email: sessionData.user.email || '',
-          created_at: sessionData.user.created_at,
+          id: authUser.id,
+          email: authUser.email || '',
+          created_at: authUser.created_at,
         },
         profile: profileData,
         accessToken,
@@ -168,7 +165,7 @@ export function setCSRFToken(cookies: AstroCookies): string {
   const token = generateCSRFToken();
 
   cookies.set('csrf-token', token, {
-    httpOnly: true,
+    httpOnly: false, // Must be readable by JavaScript to sync with requests
     secure: import.meta.env.PROD,
     sameSite: 'strict',
     path: '/',

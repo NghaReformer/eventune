@@ -1,0 +1,1263 @@
+---
+/**
+ * Admin Questionnaire Builder Page
+ * Manage dynamic questionnaire fields per occasion
+ *
+ * Security: Admin role with content:view permission required
+ */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { getAllQuestionnaireFields, getContentOccasions } from '../../../services/admin.service';
+import { hasPermission, getPermissionsForRole } from '../../../lib/auth/admin-session';
+import type { SessionData } from '../../../lib/auth/session';
+
+// Get session from middleware
+const session = Astro.locals.session as SessionData;
+const profile = session?.profile;
+const adminRole = profile?.admin_role as 'super_admin' | 'order_manager' | 'support' | null;
+const permissions = adminRole ? getPermissionsForRole(adminRole) : [];
+const csrfToken = (Astro.locals.csrfToken as string) || '';
+
+// Verify content permission
+if (!hasPermission(permissions, 'content:view')) {
+  return Astro.redirect('/admin?error=permission_denied');
+}
+
+const canEdit = hasPermission(permissions, 'content:update');
+const canDelete = hasPermission(permissions, 'content:delete');
+
+// Get filter from URL
+const selectedOccasion = Astro.url.searchParams.get('occasion') || 'all';
+
+// Fetch data
+const occasions = await getContentOccasions();
+const fields = selectedOccasion === 'all'
+  ? await getAllQuestionnaireFields()
+  : selectedOccasion === 'common'
+    ? await getAllQuestionnaireFields(null)
+    : await getAllQuestionnaireFields(selectedOccasion);
+
+// Group fields by field_group
+const fieldGroups = {
+  recipient: { label: 'Recipient Information', icon: '👤', fields: [] as typeof fields },
+  relationship: { label: 'Relationship Details', icon: '💝', fields: [] as typeof fields },
+  memories: { label: 'Memories & Stories', icon: '📖', fields: [] as typeof fields },
+  song_preferences: { label: 'Song Preferences', icon: '🎵', fields: [] as typeof fields },
+  additional: { label: 'Additional Information', icon: '📝', fields: [] as typeof fields },
+};
+
+fields.forEach(field => {
+  if (fieldGroups[field.field_group as keyof typeof fieldGroups]) {
+    fieldGroups[field.field_group as keyof typeof fieldGroups].fields.push(field);
+  }
+});
+
+const fieldTypes = [
+  { value: 'text', label: 'Text Input' },
+  { value: 'textarea', label: 'Text Area' },
+  { value: 'select', label: 'Dropdown Select' },
+  { value: 'radio', label: 'Radio Buttons' },
+  { value: 'checkbox', label: 'Checkboxes' },
+  { value: 'date', label: 'Date Picker' },
+  { value: 'number', label: 'Number Input' },
+  { value: 'email', label: 'Email Input' },
+  { value: 'phone', label: 'Phone Input' },
+];
+
+const fieldGroupOptions = [
+  { value: 'recipient', label: 'Recipient Information' },
+  { value: 'relationship', label: 'Relationship Details' },
+  { value: 'memories', label: 'Memories & Stories' },
+  { value: 'song_preferences', label: 'Song Preferences' },
+  { value: 'additional', label: 'Additional Information' },
+];
+---
+
+<AdminLayout title="Questionnaire Builder" activeNav="content">
+  <input type="hidden" id="csrf-token" value={csrfToken} />
+
+  <!-- Header with Actions -->
+  <div class="header-section">
+    <div class="header-text">
+      <h2 class="page-title">Questionnaire Builder</h2>
+      <p class="page-subtitle">Create custom questions for each occasion type</p>
+    </div>
+    <div class="header-actions">
+      <!-- Occasion Filter -->
+      <select id="occasion-filter" class="occasion-select">
+        <option value="all" selected={selectedOccasion === 'all'}>All Occasions</option>
+        <option value="common" selected={selectedOccasion === 'common'}>Common Fields (All)</option>
+        {occasions.filter(o => o.is_active).map((occ) => (
+          <option value={occ.slug} selected={selectedOccasion === occ.slug}>
+            {occ.icon} {occ.name}
+          </option>
+        ))}
+      </select>
+
+      {canEdit && (
+        <button id="add-field-btn" class="action-btn primary">
+          <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+          </svg>
+          Add New Field
+        </button>
+      )}
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <span class="stat-value">{fields.length}</span>
+      <span class="stat-label">Total Fields</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-value">{fields.filter(f => f.required).length}</span>
+      <span class="stat-label">Required</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-value">{fields.filter(f => !f.occasion_slug).length}</span>
+      <span class="stat-label">Common Fields</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-value">{fields.filter(f => f.is_active).length}</span>
+      <span class="stat-label">Active</span>
+    </div>
+  </div>
+
+  <!-- Fields by Group -->
+  {Object.entries(fieldGroups).map(([groupKey, group]) => (
+    group.fields.length > 0 && (
+      <div class="field-group-section" data-group={groupKey}>
+        <div class="group-header">
+          <span class="group-icon">{group.icon}</span>
+          <h3 class="group-title">{group.label}</h3>
+          <span class="group-count">{group.fields.length} fields</span>
+        </div>
+
+        <div class="fields-list">
+          {group.fields.map((field, index) => (
+            <div
+              class:list={['field-card', !field.is_active && 'inactive']}
+              data-id={field.id}
+              data-order={field.display_order}
+            >
+              <div class="field-drag-handle" title="Drag to reorder">
+                <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M8 6a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm0 6a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm0 6a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm8-12a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm0 6a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm0 6a2 2 0 1 1-4 0 2 2 0 0 1 4 0z"/>
+                </svg>
+              </div>
+
+              <div class="field-content">
+                <div class="field-header">
+                  <div class="field-info">
+                    <span class="field-label">{field.field_label}</span>
+                    {field.required && <span class="required-badge">Required</span>}
+                    {!field.occasion_slug && <span class="common-badge">Common</span>}
+                    {field.occasion_slug && (
+                      <span class="occasion-badge">{field.occasion_slug}</span>
+                    )}
+                  </div>
+                  <label class="toggle-switch">
+                    <input
+                      type="checkbox"
+                      checked={field.is_active}
+                      data-id={field.id}
+                      class="toggle-active"
+                      disabled={!canEdit}
+                    />
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+
+                <div class="field-meta">
+                  <span class="meta-item">
+                    <code>{field.field_name}</code>
+                  </span>
+                  <span class="meta-item type-badge">{field.field_type}</span>
+                  {field.placeholder && (
+                    <span class="meta-item placeholder">Placeholder: "{field.placeholder}"</span>
+                  )}
+                </div>
+
+                {field.help_text && (
+                  <p class="field-help">{field.help_text}</p>
+                )}
+
+                {field.options && field.options.length > 0 && (
+                  <div class="field-options">
+                    <span class="options-label">Options:</span>
+                    {(field.options as {value: string; label: string}[]).map((opt) => (
+                      <span class="option-chip">{opt.label}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {canEdit && (
+                <div class="field-actions">
+                  <button class="btn-edit" data-id={field.id} data-field={JSON.stringify(field)} title="Edit">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </button>
+                  {canDelete && (
+                    <button class="btn-delete" data-id={field.id} data-name={field.field_label} title="Delete">
+                      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  ))}
+
+  {fields.length === 0 && (
+    <div class="empty-state">
+      <svg width="64" height="64" fill="none" stroke="currentColor" viewBox="0 0 24 24" opacity="0.3">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+      </svg>
+      <p class="empty-title">No questionnaire fields found</p>
+      <p class="empty-text">
+        {selectedOccasion === 'all'
+          ? 'Create your first questionnaire field to get started.'
+          : `No fields configured for ${selectedOccasion === 'common' ? 'common fields' : 'this occasion'}.`}
+      </p>
+      {canEdit && (
+        <button id="add-field-btn-empty" class="action-btn primary mt-4">
+          <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+          </svg>
+          Add First Field
+        </button>
+      )}
+    </div>
+  )}
+
+  <!-- Add/Edit Modal -->
+  <div id="field-modal" class="modal">
+    <div class="modal-backdrop"></div>
+    <div class="modal-container">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modal-title">Add New Field</h3>
+        <button class="modal-close" id="close-modal">
+          <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <form id="field-form" class="modal-body">
+        <input type="hidden" id="field-id" name="id" />
+
+        <div class="form-grid">
+          <!-- Occasion -->
+          <div class="form-group">
+            <label for="occasion_slug" class="form-label">Occasion</label>
+            <select id="occasion_slug" name="occasion_slug" class="form-select">
+              <option value="">Common (All Occasions)</option>
+              {occasions.filter(o => o.is_active).map((occ) => (
+                <option value={occ.slug}>{occ.icon} {occ.name}</option>
+              ))}
+            </select>
+            <p class="form-hint">Leave empty for fields that appear on all occasions</p>
+          </div>
+
+          <!-- Field Group -->
+          <div class="form-group">
+            <label for="field_group" class="form-label">Field Group *</label>
+            <select id="field_group" name="field_group" required class="form-select">
+              {fieldGroupOptions.map((opt) => (
+                <option value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <!-- Field Label -->
+          <div class="form-group full-width">
+            <label for="field_label" class="form-label">Question / Label *</label>
+            <input
+              type="text"
+              id="field_label"
+              name="field_label"
+              required
+              maxlength="200"
+              class="form-input"
+              placeholder="e.g., What is the recipient's name?"
+            />
+          </div>
+
+          <!-- Field Name -->
+          <div class="form-group">
+            <label for="field_name" class="form-label">Field Name *</label>
+            <input
+              type="text"
+              id="field_name"
+              name="field_name"
+              required
+              pattern="[a-z_]+"
+              maxlength="100"
+              class="form-input"
+              placeholder="e.g., recipient_name"
+            />
+            <p class="form-hint">Lowercase letters and underscores only</p>
+          </div>
+
+          <!-- Field Type -->
+          <div class="form-group">
+            <label for="field_type" class="form-label">Field Type *</label>
+            <select id="field_type" name="field_type" required class="form-select">
+              {fieldTypes.map((opt) => (
+                <option value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <!-- Placeholder -->
+          <div class="form-group full-width">
+            <label for="placeholder" class="form-label">Placeholder Text</label>
+            <input
+              type="text"
+              id="placeholder"
+              name="placeholder"
+              maxlength="200"
+              class="form-input"
+              placeholder="e.g., Enter their full name..."
+            />
+          </div>
+
+          <!-- Help Text -->
+          <div class="form-group full-width">
+            <label for="help_text" class="form-label">Help Text</label>
+            <textarea
+              id="help_text"
+              name="help_text"
+              maxlength="500"
+              rows="2"
+              class="form-textarea"
+              placeholder="Additional instructions or guidance for this field"
+            ></textarea>
+          </div>
+
+          <!-- Options (for select/radio/checkbox) -->
+          <div class="form-group full-width" id="options-group" style="display: none;">
+            <label class="form-label">Options</label>
+            <div id="options-container">
+              <!-- Dynamic options added here -->
+            </div>
+            <button type="button" id="add-option-btn" class="add-option-btn">
+              <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+              </svg>
+              Add Option
+            </button>
+          </div>
+
+          <!-- Required & Active -->
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="required" name="required" />
+              <span>Required field</span>
+            </label>
+          </div>
+
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="is_active" name="is_active" checked />
+              <span>Active</span>
+            </label>
+          </div>
+
+          <!-- Display Order -->
+          <div class="form-group">
+            <label for="display_order" class="form-label">Display Order</label>
+            <input
+              type="number"
+              id="display_order"
+              name="display_order"
+              min="0"
+              max="1000"
+              value="10"
+              class="form-input small"
+            />
+          </div>
+
+          <!-- Validation Rules -->
+          <div class="form-group" id="validation-group">
+            <label class="form-label">Validation</label>
+            <div class="validation-inputs">
+              <input type="number" id="min_length" placeholder="Min length" class="form-input small" />
+              <input type="number" id="max_length" placeholder="Max length" class="form-input small" />
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" id="cancel-btn" class="action-btn secondary">Cancel</button>
+          <button type="submit" class="action-btn primary">
+            <span id="submit-text">Create Field</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</AdminLayout>
+
+<style>
+  .header-section {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+
+  @media (min-width: 1024px) {
+    .header-section {
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+    }
+  }
+
+  .page-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.75rem;
+    color: var(--admin-cream);
+    margin: 0;
+  }
+
+  .page-subtitle {
+    color: rgba(245, 245, 245, 0.5);
+    margin-top: 0.25rem;
+  }
+
+  .header-actions {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .occasion-select {
+    padding: 0.625rem 1rem;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(212, 175, 55, 0.2);
+    border-radius: 0.5rem;
+    color: var(--admin-cream);
+    font-size: 0.875rem;
+    min-width: 200px;
+  }
+
+  .occasion-select:focus {
+    outline: none;
+    border-color: var(--gold);
+  }
+
+  .action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1.25rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+  }
+
+  .action-btn.primary {
+    background: var(--gold);
+    color: #0A0A0A;
+  }
+
+  .action-btn.primary:hover {
+    background: #E5C158;
+  }
+
+  .action-btn.secondary {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--admin-cream);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .action-btn.secondary:hover {
+    background: rgba(255, 255, 255, 0.15);
+  }
+
+  /* Stats */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+
+  @media (min-width: 768px) {
+    .stats-row {
+      grid-template-columns: repeat(4, 1fr);
+    }
+  }
+
+  .stat-card {
+    background: rgba(20, 20, 20, 0.5);
+    border: 1px solid rgba(212, 175, 55, 0.1);
+    border-radius: 0.75rem;
+    padding: 1rem 1.25rem;
+    text-align: center;
+  }
+
+  .stat-value {
+    display: block;
+    font-family: 'Playfair Display', serif;
+    font-size: 1.75rem;
+    color: var(--gold);
+  }
+
+  .stat-label {
+    font-size: 0.75rem;
+    color: rgba(245, 245, 245, 0.5);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  /* Field Groups */
+  .field-group-section {
+    margin-bottom: 2rem;
+  }
+
+  .group-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 1.25rem;
+    background: rgba(212, 175, 55, 0.05);
+    border: 1px solid rgba(212, 175, 55, 0.15);
+    border-radius: 0.75rem 0.75rem 0 0;
+  }
+
+  .group-icon {
+    font-size: 1.5rem;
+  }
+
+  .group-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.125rem;
+    color: var(--gold);
+    margin: 0;
+  }
+
+  .group-count {
+    margin-left: auto;
+    font-size: 0.75rem;
+    color: rgba(245, 245, 245, 0.5);
+  }
+
+  .fields-list {
+    border: 1px solid rgba(212, 175, 55, 0.1);
+    border-top: none;
+    border-radius: 0 0 0.75rem 0.75rem;
+    overflow: hidden;
+  }
+
+  /* Field Cards */
+  .field-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    background: rgba(20, 20, 20, 0.3);
+    border-bottom: 1px solid rgba(212, 175, 55, 0.05);
+    transition: background 0.2s;
+  }
+
+  .field-card:last-child {
+    border-bottom: none;
+  }
+
+  .field-card:hover {
+    background: rgba(20, 20, 20, 0.5);
+  }
+
+  .field-card.inactive {
+    opacity: 0.5;
+  }
+
+  .field-drag-handle {
+    cursor: grab;
+    color: rgba(245, 245, 245, 0.3);
+    padding: 0.25rem;
+    flex-shrink: 0;
+  }
+
+  .field-drag-handle:hover {
+    color: var(--gold);
+  }
+
+  .field-content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .field-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .field-info {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .field-label {
+    font-weight: 500;
+    color: var(--admin-cream);
+  }
+
+  .required-badge {
+    font-size: 0.625rem;
+    padding: 0.125rem 0.375rem;
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+    border-radius: 0.25rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .common-badge {
+    font-size: 0.625rem;
+    padding: 0.125rem 0.375rem;
+    background: rgba(59, 130, 246, 0.2);
+    color: #3b82f6;
+    border-radius: 0.25rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .occasion-badge {
+    font-size: 0.625rem;
+    padding: 0.125rem 0.375rem;
+    background: rgba(212, 175, 55, 0.2);
+    color: var(--gold);
+    border-radius: 0.25rem;
+  }
+
+  .field-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    font-size: 0.75rem;
+    color: rgba(245, 245, 245, 0.5);
+    margin-bottom: 0.5rem;
+  }
+
+  .meta-item code {
+    background: rgba(0, 0, 0, 0.3);
+    padding: 0.125rem 0.375rem;
+    border-radius: 0.25rem;
+    font-size: 0.7rem;
+  }
+
+  .type-badge {
+    background: rgba(212, 175, 55, 0.1);
+    padding: 0.125rem 0.5rem;
+    border-radius: 0.25rem;
+    color: var(--gold);
+  }
+
+  .field-help {
+    font-size: 0.8rem;
+    color: rgba(245, 245, 245, 0.4);
+    font-style: italic;
+    margin: 0.25rem 0;
+  }
+
+  .field-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+    align-items: center;
+    margin-top: 0.5rem;
+  }
+
+  .options-label {
+    font-size: 0.7rem;
+    color: rgba(245, 245, 245, 0.4);
+  }
+
+  .option-chip {
+    font-size: 0.7rem;
+    padding: 0.125rem 0.5rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 1rem;
+    color: rgba(245, 245, 245, 0.7);
+  }
+
+  .field-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-shrink: 0;
+  }
+
+  .btn-edit, .btn-delete {
+    padding: 0.5rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 0.375rem;
+    color: rgba(245, 245, 245, 0.6);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-edit:hover {
+    background: rgba(212, 175, 55, 0.1);
+    border-color: var(--gold);
+    color: var(--gold);
+  }
+
+  .btn-delete:hover {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: #ef4444;
+    color: #ef4444;
+  }
+
+  /* Toggle */
+  .toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 22px;
+    flex-shrink: 0;
+  }
+
+  .toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+
+  .toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(255, 255, 255, 0.1);
+    transition: 0.3s;
+    border-radius: 22px;
+  }
+
+  .toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 16px;
+    width: 16px;
+    left: 3px;
+    bottom: 3px;
+    background-color: rgba(245, 245, 245, 0.5);
+    transition: 0.3s;
+    border-radius: 50%;
+  }
+
+  input:checked + .toggle-slider {
+    background-color: var(--gold);
+  }
+
+  input:checked + .toggle-slider:before {
+    transform: translateX(18px);
+    background-color: #0A0A0A;
+  }
+
+  /* Empty State */
+  .empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+    background: rgba(20, 20, 20, 0.3);
+    border: 1px dashed rgba(212, 175, 55, 0.2);
+    border-radius: 1rem;
+  }
+
+  .empty-title {
+    font-size: 1.125rem;
+    color: var(--admin-cream);
+    margin: 1rem 0 0.5rem;
+  }
+
+  .empty-text {
+    color: rgba(245, 245, 245, 0.5);
+    font-size: 0.875rem;
+  }
+
+  .mt-4 {
+    margin-top: 1rem;
+  }
+
+  /* Modal */
+  .modal {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: none;
+  }
+
+  .modal.open {
+    display: block;
+  }
+
+  .modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+  }
+
+  .modal-container {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 95%;
+    max-width: 640px;
+    max-height: 90vh;
+    background: #1A1A1A;
+    border: 1px solid rgba(212, 175, 55, 0.2);
+    border-radius: 1rem;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid rgba(212, 175, 55, 0.1);
+  }
+
+  .modal-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.25rem;
+    color: var(--gold);
+    margin: 0;
+  }
+
+  .modal-close {
+    padding: 0.5rem;
+    background: none;
+    border: none;
+    color: rgba(245, 245, 245, 0.5);
+    cursor: pointer;
+  }
+
+  .modal-close:hover {
+    color: var(--admin-cream);
+  }
+
+  .modal-body {
+    padding: 1.5rem;
+    overflow-y: auto;
+    flex: 1;
+  }
+
+  .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+    padding-top: 1.5rem;
+    margin-top: 1rem;
+    border-top: 1px solid rgba(212, 175, 55, 0.1);
+  }
+
+  /* Form */
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  @media (min-width: 640px) {
+    .form-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  .form-group.full-width {
+    grid-column: 1 / -1;
+  }
+
+  .form-label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--admin-cream);
+    margin-bottom: 0.5rem;
+  }
+
+  .form-input, .form-select, .form-textarea {
+    width: 100%;
+    padding: 0.625rem 0.875rem;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(212, 175, 55, 0.15);
+    border-radius: 0.5rem;
+    color: var(--admin-cream);
+    font-size: 0.875rem;
+  }
+
+  .form-input:focus, .form-select:focus, .form-textarea:focus {
+    outline: none;
+    border-color: var(--gold);
+  }
+
+  .form-input.small {
+    max-width: 120px;
+  }
+
+  .form-hint {
+    font-size: 0.75rem;
+    color: rgba(245, 245, 245, 0.4);
+    margin-top: 0.25rem;
+  }
+
+  .checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    font-size: 0.875rem;
+    color: var(--admin-cream);
+  }
+
+  .checkbox-label input {
+    width: 1rem;
+    height: 1rem;
+    accent-color: var(--gold);
+  }
+
+  .validation-inputs {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .add-option-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: rgba(212, 175, 55, 0.1);
+    border: 1px dashed rgba(212, 175, 55, 0.3);
+    border-radius: 0.5rem;
+    color: var(--gold);
+    font-size: 0.8rem;
+    cursor: pointer;
+    margin-top: 0.5rem;
+  }
+
+  .add-option-btn:hover {
+    background: rgba(212, 175, 55, 0.15);
+  }
+
+  #options-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .option-row {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .option-row input {
+    flex: 1;
+  }
+
+  .remove-option-btn {
+    padding: 0.5rem;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    border-radius: 0.375rem;
+    color: #ef4444;
+    cursor: pointer;
+  }
+</style>
+
+<script>
+  // Helper: Get CSRF token from cookie
+  const getCSRFToken = () => {
+    const match = document.cookie.match(/(?:^|;\s*)csrf-token=([^;]*)/);
+    return match ? decodeURIComponent(match[1]) : '';
+  };
+
+  // Elements
+  const modal = document.getElementById('field-modal');
+  const form = document.getElementById('field-form') as HTMLFormElement;
+  const modalTitle = document.getElementById('modal-title');
+  const submitText = document.getElementById('submit-text');
+  const occasionFilter = document.getElementById('occasion-filter') as HTMLSelectElement;
+  const fieldTypeSelect = document.getElementById('field_type') as HTMLSelectElement;
+  const optionsGroup = document.getElementById('options-group');
+  const optionsContainer = document.getElementById('options-container');
+  const addOptionBtn = document.getElementById('add-option-btn');
+
+  let editMode = false;
+
+  // Occasion filter change
+  occasionFilter?.addEventListener('change', () => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('occasion', occasionFilter.value);
+    window.location.href = url.toString();
+  });
+
+  // Field type change - show/hide options
+  fieldTypeSelect?.addEventListener('change', () => {
+    const needsOptions = ['select', 'radio', 'checkbox'].includes(fieldTypeSelect.value);
+    if (optionsGroup) {
+      optionsGroup.style.display = needsOptions ? 'block' : 'none';
+    }
+  });
+
+  // Add option
+  function addOptionRow(value = '', label = '') {
+    const row = document.createElement('div');
+    row.className = 'option-row';
+    row.innerHTML = `
+      <input type="text" class="form-input option-value" placeholder="Value" value="${value}" />
+      <input type="text" class="form-input option-label" placeholder="Label" value="${label}" />
+      <button type="button" class="remove-option-btn">
+        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    `;
+    row.querySelector('.remove-option-btn')?.addEventListener('click', () => row.remove());
+    optionsContainer?.appendChild(row);
+  }
+
+  addOptionBtn?.addEventListener('click', () => addOptionRow());
+
+  // Open modal
+  function openModal(field?: any) {
+    if (field) {
+      editMode = true;
+      modalTitle!.textContent = 'Edit Field';
+      submitText!.textContent = 'Update Field';
+      populateForm(field);
+    } else {
+      editMode = false;
+      modalTitle!.textContent = 'Add New Field';
+      submitText!.textContent = 'Create Field';
+      form.reset();
+      (document.getElementById('field-id') as HTMLInputElement).value = '';
+      (document.getElementById('is_active') as HTMLInputElement).checked = true;
+      optionsContainer!.innerHTML = '';
+      optionsGroup!.style.display = 'none';
+    }
+    modal?.classList.add('open');
+  }
+
+  function closeModal() {
+    modal?.classList.remove('open');
+    form.reset();
+    editMode = false;
+  }
+
+  function populateForm(field: any) {
+    (document.getElementById('field-id') as HTMLInputElement).value = field.id || '';
+    (document.getElementById('occasion_slug') as HTMLSelectElement).value = field.occasion_slug || '';
+    (document.getElementById('field_group') as HTMLSelectElement).value = field.field_group || 'additional';
+    (document.getElementById('field_label') as HTMLInputElement).value = field.field_label || '';
+    (document.getElementById('field_name') as HTMLInputElement).value = field.field_name || '';
+    (document.getElementById('field_type') as HTMLSelectElement).value = field.field_type || 'text';
+    (document.getElementById('placeholder') as HTMLInputElement).value = field.placeholder || '';
+    (document.getElementById('help_text') as HTMLTextAreaElement).value = field.help_text || '';
+    (document.getElementById('required') as HTMLInputElement).checked = field.required || false;
+    (document.getElementById('is_active') as HTMLInputElement).checked = field.is_active !== false;
+    (document.getElementById('display_order') as HTMLInputElement).value = field.display_order?.toString() || '10';
+
+    // Validation rules
+    if (field.validation_rules) {
+      (document.getElementById('min_length') as HTMLInputElement).value = field.validation_rules.min_length?.toString() || '';
+      (document.getElementById('max_length') as HTMLInputElement).value = field.validation_rules.max_length?.toString() || '';
+    }
+
+    // Options
+    optionsContainer!.innerHTML = '';
+    const needsOptions = ['select', 'radio', 'checkbox'].includes(field.field_type);
+    optionsGroup!.style.display = needsOptions ? 'block' : 'none';
+
+    if (field.options && Array.isArray(field.options)) {
+      field.options.forEach((opt: any) => addOptionRow(opt.value, opt.label));
+    }
+  }
+
+  // Event listeners
+  document.getElementById('add-field-btn')?.addEventListener('click', () => openModal());
+  document.getElementById('add-field-btn-empty')?.addEventListener('click', () => openModal());
+  document.getElementById('close-modal')?.addEventListener('click', closeModal);
+  document.getElementById('cancel-btn')?.addEventListener('click', closeModal);
+
+  document.querySelector('.modal-backdrop')?.addEventListener('click', closeModal);
+
+  // Edit buttons
+  document.querySelectorAll('.btn-edit').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const fieldData = (e.currentTarget as HTMLElement).dataset.field;
+      if (fieldData) {
+        try {
+          const field = JSON.parse(fieldData);
+          openModal(field);
+        } catch (err) {
+          console.error('Failed to parse field data:', err);
+        }
+      }
+    });
+  });
+
+  // Delete buttons
+  document.querySelectorAll('.btn-delete').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const target = e.currentTarget as HTMLElement;
+      const id = target.dataset.id;
+      const name = target.dataset.name;
+
+      if (!confirm(`Are you sure you want to delete "${name}"? This action cannot be undone.`)) {
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/admin/content/questionnaire/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ id, csrf_token: getCSRFToken() }),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || 'Failed to delete');
+        }
+
+        window.location.reload();
+      } catch (error) {
+        alert(error instanceof Error ? error.message : 'Failed to delete field');
+      }
+    });
+  });
+
+  // Toggle active
+  document.querySelectorAll('.toggle-active').forEach(input => {
+    input.addEventListener('change', async (e) => {
+      const target = e.target as HTMLInputElement;
+      const id = target.dataset.id;
+      const isActive = target.checked;
+
+      try {
+        const response = await fetch('/api/admin/content/questionnaire/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ id, is_active: isActive, csrf_token: getCSRFToken() }),
+        });
+
+        if (!response.ok) {
+          const result = await response.json();
+          throw new Error(result.error || 'Failed to update');
+        }
+
+        const card = target.closest('.field-card');
+        if (card) {
+          card.classList.toggle('inactive', !isActive);
+        }
+      } catch (error) {
+        alert(error instanceof Error ? error.message : 'Failed to update status');
+        target.checked = !isActive;
+      }
+    });
+  });
+
+  // Form submit
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const formData = new FormData(form);
+    const data: any = {};
+
+    formData.forEach((value, key) => {
+      if (key === 'required' || key === 'is_active') {
+        data[key] = (document.getElementById(key) as HTMLInputElement).checked;
+      } else if (key === 'display_order') {
+        data[key] = parseInt(value as string, 10) || 10;
+      } else if (key === 'occasion_slug') {
+        data[key] = value || null;
+      } else {
+        data[key] = value;
+      }
+    });
+
+    // Collect options
+    const needsOptions = ['select', 'radio', 'checkbox'].includes(data.field_type);
+    if (needsOptions) {
+      const optionRows = optionsContainer?.querySelectorAll('.option-row');
+      const options: any[] = [];
+      optionRows?.forEach(row => {
+        const value = (row.querySelector('.option-value') as HTMLInputElement)?.value?.trim();
+        const label = (row.querySelector('.option-label') as HTMLInputElement)?.value?.trim();
+        if (value && label) {
+          options.push({ value, label });
+        }
+      });
+      data.options = options.length > 0 ? options : null;
+    } else {
+      data.options = null;
+    }
+
+    // Validation rules
+    const minLength = (document.getElementById('min_length') as HTMLInputElement)?.value;
+    const maxLength = (document.getElementById('max_length') as HTMLInputElement)?.value;
+    if (minLength || maxLength) {
+      data.validation_rules = {};
+      if (minLength) data.validation_rules.min_length = parseInt(minLength, 10);
+      if (maxLength) data.validation_rules.max_length = parseInt(maxLength, 10);
+    } else {
+      data.validation_rules = null;
+    }
+
+    data.csrf_token = getCSRFToken();
+
+    try {
+      const endpoint = editMode
+        ? '/api/admin/content/questionnaire/update'
+        : '/api/admin/content/questionnaire/create';
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(data),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to save');
+      }
+
+      window.location.reload();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to save field');
+    }
+  });
+</script>

@@ -7,9 +7,9 @@
  */
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import { getOrderById, getCustomerById } from '../../../services/admin.service';
-import { hasPermission } from '../../../lib/auth/admin-session';
+import { hasPermission, getPermissionsForRole } from '../../../lib/auth/admin-session';
 import { isValidUUID } from '../../../lib/security/validation';
-import type { AdminSessionData } from '../../../lib/auth/admin-session';
+import type { SessionData } from '../../../lib/auth/session';
 
 const { id } = Astro.params;
 
@@ -18,10 +18,12 @@ if (!id || !isValidUUID(id)) {
   return Astro.redirect('/admin/orders');
 }
 
-// Get admin session
-const adminSession = Astro.locals.adminSession as AdminSessionData;
+// Get session from middleware (set before page runs)
+const session = Astro.locals.session as SessionData;
+const profile = session?.profile;
+const adminRole = profile?.admin_role as 'super_admin' | 'order_manager' | 'support' | null;
+const permissions = adminRole ? getPermissionsForRole(adminRole) : [];
 const csrfToken = Astro.locals.csrfToken as string;
-const { permissions, adminRole } = adminSession;
 
 // Fetch order data
 const orderData = await getOrderById(id);
@@ -1238,6 +1240,12 @@ const isPaid = order.payment_status === 'paid';
 </style>
 
 <script>
+  // Helper: Get CSRF token from cookie (always use current value)
+  const getCSRFToken = () => {
+    const match = document.cookie.match(/(?:^|;\s*)csrf-token=([^;]*)/);
+    return match ? decodeURIComponent(match[1]) : '';
+  };
+
   // Status dropdown
   const statusBtn = document.getElementById('status-dropdown-btn');
   const statusMenu = document.getElementById('status-dropdown-menu');
@@ -1299,9 +1307,12 @@ const isPaid = order.payment_status === 'paid';
 
     try {
       const formData = new FormData(statusForm);
+      // Override csrf_token with current cookie value
+      formData.set('csrf_token', getCSRFToken());
 
       const response = await fetch('/api/admin/orders/update-status', {
         method: 'POST',
+        credentials: 'same-origin',
         body: formData,
       });
 
@@ -1339,12 +1350,13 @@ const isPaid = order.payment_status === 'paid';
 
     try {
       const formData = new FormData();
-      formData.append('csrf_token', (addNoteForm.querySelector('input[name="csrf_token"]') as HTMLInputElement).value);
+      formData.append('csrf_token', getCSRFToken());
       formData.append('order_id', (addNoteForm.querySelector('input[name="order_id"]') as HTMLInputElement).value);
       formData.append('content', noteInput.value);
 
       const response = await fetch('/api/admin/orders/add-note', {
         method: 'POST',
+        credentials: 'same-origin',
         body: formData,
       });
 

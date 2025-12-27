@@ -7,13 +7,16 @@
  */
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import { getSiteSettings } from '../../../services/admin.service';
-import { hasPermission } from '../../../lib/auth/admin-session';
-import type { AdminSessionData } from '../../../lib/auth/admin-session';
+import { hasPermission, getPermissionsForRole } from '../../../lib/auth/admin-session';
+import type { SessionData } from '../../../lib/auth/session';
 
-// Get admin session from layout
-const adminSession = Astro.locals.adminSession as AdminSessionData;
-const { user, profile, adminRole, permissions } = adminSession;
-const csrfToken = Astro.locals.csrfToken;
+// Get session from middleware (set before page runs)
+const session = Astro.locals.session as SessionData;
+const user = session?.user;
+const profile = session?.profile;
+const adminRole = profile?.admin_role as 'super_admin' | 'order_manager' | 'support' | null;
+const permissions = adminRole ? getPermissionsForRole(adminRole) : [];
+const csrfToken = Astro.locals.csrfToken as string;
 
 // Verify settings permission
 if (!hasPermission(permissions, 'settings:view')) {
@@ -39,6 +42,14 @@ const activeTab = url.searchParams.get('tab') || 'site';
 ---
 
 <AdminLayout title="Settings" activeNav="settings">
+  <script is:inline define:vars={{ csrfToken }}>
+    // Debug: Log CSRF token on page load
+    console.log('[Settings Page] CSRF token:', {
+      value: csrfToken,
+      length: csrfToken?.length,
+    });
+  </script>
+
   <!-- Page Header -->
   <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-8">
     <div>
@@ -185,6 +196,178 @@ const activeTab = url.searchParams.get('tab') || 'site';
             </div>
           </div>
 
+          <!-- Contact Information Section Header -->
+          <div class="setting-section-header">
+            <h3 class="section-title">Contact Information</h3>
+            <p class="section-description">Manage contact details displayed on the website</p>
+          </div>
+
+          <!-- Contact Email -->
+          <div class="setting-group">
+            <div class="setting-header">
+              <h3 class="setting-title">Contact Email</h3>
+              <p class="setting-description">Primary email for customer inquiries</p>
+            </div>
+            <div class="setting-control">
+              <input
+                type="email"
+                name="contact_email"
+                value={settings.contact_email || 'hello@eventunestudios.com'}
+                placeholder="hello@eventunestudios.com"
+                class="setting-input"
+                disabled={!canEdit}
+              />
+            </div>
+          </div>
+
+          <!-- Contact Phone -->
+          <div class="setting-group">
+            <div class="setting-header">
+              <h3 class="setting-title">Contact Phone Number</h3>
+              <p class="setting-description">Phone number for general inquiries</p>
+            </div>
+            <div class="setting-control">
+              <input
+                type="text"
+                name="contact_phone"
+                value={settings.contact_phone || ''}
+                placeholder="+237 XXX XXX XXX"
+                class="setting-input"
+                disabled={!canEdit}
+              />
+            </div>
+          </div>
+
+          <!-- Business Address -->
+          <div class="setting-group">
+            <div class="setting-header">
+              <h3 class="setting-title">Business Address</h3>
+              <p class="setting-description">Physical business location (optional)</p>
+            </div>
+            <div class="setting-control">
+              <input
+                type="text"
+                name="contact_address"
+                value={settings.contact_address || ''}
+                placeholder="City, Country"
+                class="setting-input"
+                disabled={!canEdit}
+              />
+            </div>
+          </div>
+
+          <!-- Business Hours -->
+          <div class="setting-group">
+            <div class="setting-header">
+              <h3 class="setting-title">Business Hours</h3>
+              <p class="setting-description">Operating hours in JSON format</p>
+            </div>
+            <div class="setting-control" style="width: 100%;">
+              <textarea
+                name="contact_business_hours"
+                class="setting-textarea"
+                placeholder='{"weekdays": "9:00 AM - 6:00 PM (GMT+1)", "saturday": "10:00 AM - 4:00 PM (GMT+1)", "sunday": "Closed"}'
+                disabled={!canEdit}
+              >{settings.contact_business_hours || ''}</textarea>
+            </div>
+          </div>
+
+          <!-- Social Media Section Header -->
+          <div class="setting-section-header">
+            <h3 class="section-title">Social Media Links</h3>
+            <p class="section-description">Social media profile URLs</p>
+          </div>
+
+          <!-- Instagram -->
+          <div class="setting-group">
+            <div class="setting-header">
+              <h3 class="setting-title">Instagram URL</h3>
+              <p class="setting-description">Full Instagram profile URL</p>
+            </div>
+            <div class="setting-control">
+              <input
+                type="url"
+                name="social_instagram"
+                value={settings.social_instagram || ''}
+                placeholder="https://instagram.com/eventunestudios"
+                class="setting-input"
+                disabled={!canEdit}
+              />
+            </div>
+          </div>
+
+          <!-- YouTube -->
+          <div class="setting-group">
+            <div class="setting-header">
+              <h3 class="setting-title">YouTube URL</h3>
+              <p class="setting-description">Full YouTube channel URL</p>
+            </div>
+            <div class="setting-control">
+              <input
+                type="url"
+                name="social_youtube"
+                value={settings.social_youtube || ''}
+                placeholder="https://youtube.com/@eventunestudios"
+                class="setting-input"
+                disabled={!canEdit}
+              />
+            </div>
+          </div>
+
+          <!-- TikTok -->
+          <div class="setting-group">
+            <div class="setting-header">
+              <h3 class="setting-title">TikTok URL</h3>
+              <p class="setting-description">Full TikTok profile URL</p>
+            </div>
+            <div class="setting-control">
+              <input
+                type="url"
+                name="social_tiktok"
+                value={settings.social_tiktok || ''}
+                placeholder="https://tiktok.com/@eventunestudios"
+                class="setting-input"
+                disabled={!canEdit}
+              />
+            </div>
+          </div>
+
+          <!-- Twitter/X -->
+          <div class="setting-group">
+            <div class="setting-header">
+              <h3 class="setting-title">Twitter/X URL</h3>
+              <p class="setting-description">Full Twitter/X profile URL</p>
+            </div>
+            <div class="setting-control">
+              <input
+                type="url"
+                name="social_twitter"
+                value={settings.social_twitter || ''}
+                placeholder="https://x.com/eventunestudios"
+                class="setting-input"
+                disabled={!canEdit}
+              />
+            </div>
+          </div>
+
+          <!-- Facebook -->
+          <div class="setting-group">
+            <div class="setting-header">
+              <h3 class="setting-title">Facebook URL</h3>
+              <p class="setting-description">Full Facebook page URL</p>
+            </div>
+            <div class="setting-control">
+              <input
+                type="url"
+                name="social_facebook"
+                value={settings.social_facebook || ''}
+                placeholder="https://facebook.com/eventunestudios"
+                class="setting-input"
+                disabled={!canEdit}
+              />
+            </div>
+          </div>
+
           {canEdit && (
             <div class="form-actions">
               <button type="submit" class="save-btn">
@@ -242,7 +425,7 @@ const activeTab = url.searchParams.get('tab') || 'site';
           </div>
 
           <div class="profile-actions">
-            <a href="/portal/settings" class="profile-btn secondary">
+            <a href="/dashboard/profile" class="profile-btn secondary">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
               </svg>
@@ -469,19 +652,44 @@ const activeTab = url.searchParams.get('tab') || 'site';
   }
 
   .setting-input {
-    width: 8rem;
+    width: 100%;
+    max-width: 400px;
     padding: 0.75rem 1rem;
     background: rgba(0, 0, 0, 0.3);
     border: 1px solid rgba(212, 175, 55, 0.1);
     border-radius: 0.5rem;
     color: var(--admin-cream);
     font-size: 0.875rem;
+  }
+
+  .setting-input[type="number"] {
+    width: 8rem;
     text-align: center;
   }
 
   .setting-input:focus {
     outline: none;
     border-color: rgba(212, 175, 55, 0.3);
+  }
+
+  .setting-section-header {
+    padding: 1.5rem;
+    background: rgba(212, 175, 55, 0.05);
+    border-bottom: 2px solid rgba(212, 175, 55, 0.2);
+    margin-top: 1rem;
+  }
+
+  .section-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--gold);
+    margin-bottom: 0.25rem;
+  }
+
+  .section-description {
+    font-size: 0.8rem;
+    color: rgba(245, 245, 245, 0.4);
   }
 
   .setting-textarea {
@@ -849,6 +1057,12 @@ const activeTab = url.searchParams.get('tab') || 'site';
 </style>
 
 <script>
+  // Helper: Get CSRF token from cookie (always use current value)
+  const getCSRFToken = () => {
+    const match = document.cookie.match(/(?:^|;\s*)csrf-token=([^;]*)/);
+    return match ? decodeURIComponent(match[1]) : '';
+  };
+
   // Site settings form submission
   const form = document.getElementById('site-settings-form') as HTMLFormElement;
 
@@ -858,33 +1072,53 @@ const activeTab = url.searchParams.get('tab') || 'site';
     const formData = new FormData(form);
 
     // Build payload matching API expectations
-    // csrf_token is sent separately, not nested in settings
+    // csrf_token is read from cookie to ensure current value
     const payload = {
-      csrf_token: formData.get('csrf_token'),
+      csrf_token: getCSRFToken(),
       booking_enabled: formData.get('booking_enabled') === 'on',
       default_capacity: formData.get('default_capacity'),
       maintenance_mode: formData.get('maintenance_enabled') === 'on',
       whatsapp_number: formData.get('support_whatsapp') || '',
+      // Contact information
+      contact_email: formData.get('contact_email') || '',
+      contact_phone: formData.get('contact_phone') || '',
+      contact_address: formData.get('contact_address') || '',
+      contact_business_hours: formData.get('contact_business_hours') || '',
+      // Social media links
+      social_instagram: formData.get('social_instagram') || '',
+      social_youtube: formData.get('social_youtube') || '',
+      social_tiktok: formData.get('social_tiktok') || '',
+      social_twitter: formData.get('social_twitter') || '',
+      social_facebook: formData.get('social_facebook') || '',
     };
+
+    console.log('[Settings] Submitting settings update:', {
+      ...payload,
+      csrf_token: payload.csrf_token ? 'present' : 'missing',
+    });
 
     try {
       const response = await fetch('/api/admin/settings/update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
         body: JSON.stringify(payload),
       });
 
       const data = await response.json();
+
+      console.log('[Settings] API response:', { ok: response.ok, status: response.status, data });
 
       if (response.ok) {
         // Show success message
         alert('Settings saved successfully!');
         window.location.reload();
       } else {
+        console.error('[Settings] Save failed:', data);
         alert(data.error || 'Failed to save settings');
       }
     } catch (error) {
-      console.error('Error saving settings:', error);
+      console.error('[Settings] Error saving settings:', error);
       alert('An error occurred while saving settings');
     }
   });

@@ -13,7 +13,7 @@ import { logAdminAction } from '../../../../lib/audit/logger';
 import { checkRateLimit } from '../../../../lib/security/validation';
 import { ADMIN_CONFIG } from '../../../../config/admin.constants';
 
-const VALID_TABLES = ['config_packages', 'config_occasions', 'config_faq', 'config_testimonials'] as const;
+const VALID_TABLES = ['config_packages', 'config_occasions', 'config_faq', 'config_testimonials', 'config_samples'] as const;
 type ValidTable = typeof VALID_TABLES[number];
 
 export const POST: APIRoute = async ({ request, cookies, clientAddress }) => {
@@ -59,8 +59,18 @@ export const POST: APIRoute = async ({ request, cookies, clientAddress }) => {
     const body = await request.json();
     const { id, table, is_active, csrf_token } = body;
 
+    // Debug logging
+    const cookieToken = cookies.get('csrf-token')?.value;
+    console.log('[Toggle API] CSRF validation:', {
+      cookieToken: cookieToken ? `${cookieToken.substring(0, 8)}...` : 'missing',
+      bodyToken: csrf_token ? `${csrf_token.substring(0, 8)}...` : 'missing',
+      cookieLength: cookieToken?.length,
+      bodyLength: csrf_token?.length,
+    });
+
     // CSRF validation
     if (!validateCSRFToken(cookies, csrf_token || null)) {
+      console.error('[Toggle API] CSRF validation failed');
       return new Response(
         JSON.stringify({ error: 'Invalid security token. Please refresh and try again.' }),
         { status: 403, headers: { 'Content-Type': 'application/json' } }

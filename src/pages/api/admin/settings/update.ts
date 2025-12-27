@@ -19,6 +19,17 @@ const ALLOWED_SETTINGS = [
   'default_capacity',
   'maintenance_mode',
   'whatsapp_number',
+  // Contact information
+  'contact_email',
+  'contact_phone',
+  'contact_address',
+  'contact_business_hours',
+  // Social media links
+  'social_instagram',
+  'social_youtube',
+  'social_tiktok',
+  'social_twitter',
+  'social_facebook',
 ] as const;
 
 type AllowedSetting = typeof ALLOWED_SETTINGS[number];
@@ -46,6 +57,69 @@ const SETTING_CONFIG: Record<AllowedSetting, SettingConfig> = {
   whatsapp_number: {
     validate: (v) => typeof v === 'string' && v.length <= 50,
     transform: (v) => sanitizeString(String(v), 50),
+  },
+  // Contact information
+  contact_email: {
+    validate: (v) => {
+      if (typeof v !== 'string') return false;
+      if (v.length === 0) return true; // Allow empty
+      // Basic email validation
+      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) && v.length <= 200;
+    },
+    transform: (v) => sanitizeString(String(v), 200),
+  },
+  contact_phone: {
+    validate: (v) => typeof v === 'string' && v.length <= 50,
+    transform: (v) => sanitizeString(String(v), 50),
+  },
+  contact_address: {
+    validate: (v) => typeof v === 'string' && v.length <= 500,
+    transform: (v) => sanitizeString(String(v), 500),
+  },
+  contact_business_hours: {
+    validate: (v) => {
+      if (typeof v !== 'string') return false;
+      if (v.length === 0) return true; // Allow empty
+      if (v.length > 2000) return false;
+      // Validate JSON if not empty
+      try {
+        JSON.parse(v);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    transform: (v) => {
+      const str = String(v);
+      if (str.length === 0) return '';
+      // Validate and minify JSON
+      try {
+        return JSON.stringify(JSON.parse(str));
+      } catch {
+        return '';
+      }
+    },
+  },
+  // Social media links
+  social_instagram: {
+    validate: (v) => typeof v === 'string' && v.length <= 500,
+    transform: (v) => sanitizeString(String(v), 500),
+  },
+  social_youtube: {
+    validate: (v) => typeof v === 'string' && v.length <= 500,
+    transform: (v) => sanitizeString(String(v), 500),
+  },
+  social_tiktok: {
+    validate: (v) => typeof v === 'string' && v.length <= 500,
+    transform: (v) => sanitizeString(String(v), 500),
+  },
+  social_twitter: {
+    validate: (v) => typeof v === 'string' && v.length <= 500,
+    transform: (v) => sanitizeString(String(v), 500),
+  },
+  social_facebook: {
+    validate: (v) => typeof v === 'string' && v.length <= 500,
+    transform: (v) => sanitizeString(String(v), 500),
   },
 };
 

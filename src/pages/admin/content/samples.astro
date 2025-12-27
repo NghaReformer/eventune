@@ -1,0 +1,1181 @@
+---
+/**
+ * Admin Samples Management Page
+ * Full CRUD interface for managing sample songs with media preview
+ *
+ * Security: Admin role with content:view permission required
+ */
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { getContentSamples, getContentOccasions } from '../../../services/admin.service';
+import { hasPermission, getPermissionsForRole } from '../../../lib/auth/admin-session';
+import type { SessionData } from '../../../lib/auth/session';
+
+// Get session from middleware
+const session = Astro.locals.session as SessionData;
+const profile = session?.profile;
+const adminRole = profile?.admin_role as 'super_admin' | 'order_manager' | 'support' | null;
+const permissions = adminRole ? getPermissionsForRole(adminRole) : [];
+const csrfToken = Astro.locals.csrfToken as string;
+
+// Verify content permission
+if (!hasPermission(permissions, 'content:view')) {
+  return Astro.redirect('/admin?error=permission_denied');
+}
+
+const canEdit = hasPermission(permissions, 'content:update');
+const canDelete = hasPermission(permissions, 'content:delete');
+
+// Fetch samples and occasions
+const [samples, occasions] = await Promise.all([
+  getContentSamples(),
+  getContentOccasions(),
+]);
+
+// Format duration helper
+function formatDuration(seconds: number | null): string {
+  if (!seconds) return '--:--';
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+// Get occasion name from slug
+function getOccasionName(slug: string | null): string {
+  if (!slug) return 'Uncategorized';
+  return occasions.find(o => o.slug === slug)?.name || slug;
+}
+---
+
+<AdminLayout title="Manage Samples" activeNav="content">
+  <input type="hidden" id="csrf-token" value={csrfToken} />
+
+  <!-- Header with Actions -->
+  <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-8">
+    <div>
+      <h2 class="font-display text-2xl text-admin-cream">Sample Songs</h2>
+      <p class="text-admin-cream/50 mt-1">Manage sample songs to showcase your work</p>
+    </div>
+    {canEdit && (
+      <button id="add-sample-btn" class="action-btn primary">
+        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+        </svg>
+        Add New Sample
+      </button>
+    )}
+  </div>
+
+  <!-- Samples Grid -->
+  <div class="samples-grid">
+    {samples.map((sample) => (
+      <div class:list={['sample-card', !sample.is_active && 'inactive']} data-id={sample.id}>
+        {sample.cover_image_url && (
+          <div class="sample-cover">
+            <img src={sample.cover_image_url} alt={sample.title} />
+          </div>
+        )}
+
+        <div class="card-content">
+          <div class="card-header">
+            <div class="badges">
+              <span class="badge occasion">{getOccasionName(sample.occasion_slug)}</span>
+              {sample.is_featured && <span class="badge featured">Featured</span>}
+            </div>
+            <label class="toggle-switch">
+              <input
+                type="checkbox"
+                checked={sample.is_active}
+                data-id={sample.id}
+                data-table="config_samples"
+                class="toggle-active"
+                disabled={!canEdit}
+              />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <h3 class="sample-title">{sample.title}</h3>
+          {sample.genre && <p class="sample-genre">{sample.genre}</p>}
+          {sample.description && <p class="sample-description">{sample.description}</p>}
+
+          <!-- Media Preview -->
+          {sample.media_type === 'video' && sample.video_url ? (
+            <div class="video-preview">
+              <div class="video-embed-container">
+                <iframe
+                  src={sample.video_url.includes('youtube.com') || sample.video_url.includes('youtu.be')
+                    ? `https://www.youtube.com/embed/${sample.video_url.split('v=')[1]?.split('&')[0] || sample.video_url.split('/').pop()}`
+                    : sample.video_url.includes('vimeo.com')
+                    ? `https://player.vimeo.com/video/${sample.video_url.split('/').pop()}`
+                    : sample.video_url}
+                  frameborder="0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowfullscreen
+                  class="video-iframe"
+                ></iframe>
+              </div>
+              <div class="media-meta">
+                <span class="meta-label">Type:</span>
+                <span class="meta-value">Video</span>
+              </div>
+            </div>
+          ) : (
+            <div class="audio-preview" data-url={sample.audio_url}>
+              <button class="play-btn" data-sample-id={sample.id}>
+                <svg class="play-icon" width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+                <svg class="pause-icon hidden" width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+                </svg>
+              </button>
+              <div class="audio-info">
+                <div class="progress-bar">
+                  <div class="progress-fill" style="width: 0%"></div>
+                </div>
+                <div class="audio-meta">
+                  <span class="duration">{formatDuration(sample.duration_seconds)}</span>
+                  <span class="source-type">{sample.audio_source_type === 'url' ? 'External' : 'Uploaded'}</span>
+                </div>
+              </div>
+              <audio preload="metadata" src={sample.audio_url}></audio>
+            </div>
+          )}
+
+          <div class="sample-meta">
+            <div class="meta-row">
+              <span class="meta-label">Display Order:</span>
+              <span class="meta-value">{sample.display_order}</span>
+            </div>
+          </div>
+
+          {canEdit && (
+            <div class="card-actions">
+              <button class="btn-edit" data-id={sample.id}>
+                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                Edit
+              </button>
+              {canDelete && (
+                <button class="btn-delete" data-id={sample.id} data-title={sample.title}>
+                  <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                  Delete
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    ))}
+  </div>
+
+  {samples.length === 0 && (
+    <div class="empty-state">
+      <svg class="w-16 h-16 text-gold/20 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+      </svg>
+      <p class="text-admin-cream/40 text-lg">No samples found</p>
+      <p class="text-admin-cream/30 text-sm mt-1">Click "Add New Sample" to get started</p>
+    </div>
+  )}
+
+  <!-- Edit/Create Modal -->
+  <div id="sample-modal" class="modal">
+    <div class="modal-backdrop"></div>
+    <div class="modal-container">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modal-title">Add New Sample</h3>
+        <button class="modal-close" id="close-modal">
+          <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <form id="sample-form" class="modal-body">
+        <input type="hidden" id="sample-id" name="id" />
+
+        <div class="form-grid">
+          <div class="form-group full-width">
+            <label for="title" class="form-label">Title *</label>
+            <input
+              type="text"
+              id="title"
+              name="title"
+              required
+              maxlength="200"
+              class="form-input"
+              placeholder="e.g., Forever Starts Today"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="occasion_slug" class="form-label">Occasion</label>
+            <select id="occasion_slug" name="occasion_slug" class="form-select">
+              <option value="">Select occasion...</option>
+              {occasions.filter(o => o.is_active).map(occ => (
+                <option value={occ.slug}>{occ.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="genre" class="form-label">Genre/Style</label>
+            <input
+              type="text"
+              id="genre"
+              name="genre"
+              maxlength="100"
+              class="form-input"
+              placeholder="e.g., Pop Ballad, R&B, Country"
+            />
+          </div>
+
+          <div class="form-group full-width">
+            <label for="description" class="form-label">Description</label>
+            <textarea
+              id="description"
+              name="description"
+              maxlength="1000"
+              rows="3"
+              class="form-textarea"
+              placeholder="Describe the song, its story, or what makes it special"
+            ></textarea>
+          </div>
+
+          <div class="form-group full-width">
+            <label class="form-label">Media Type *</label>
+            <div class="radio-group">
+              <label class="radio-label">
+                <input
+                  type="radio"
+                  name="media_type"
+                  value="audio"
+                  checked
+                  class="radio-input"
+                />
+                <span>Audio (MP3, SoundCloud, etc.)</span>
+              </label>
+              <label class="radio-label">
+                <input
+                  type="radio"
+                  name="media_type"
+                  value="video"
+                  class="radio-input"
+                />
+                <span>Video (YouTube, Vimeo, etc.)</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="form-group full-width" id="audio-url-group">
+            <label for="audio_url" class="form-label">Audio URL *</label>
+            <input
+              type="url"
+              id="audio_url"
+              name="audio_url"
+              required
+              maxlength="500"
+              class="form-input"
+              placeholder="https://example.com/audio.mp3 or SoundCloud link"
+            />
+            <p class="form-hint">Direct link to audio file or SoundCloud embed URL</p>
+          </div>
+
+          <div class="form-group full-width hidden" id="video-url-group">
+            <label for="video_url" class="form-label">Video URL *</label>
+            <input
+              type="url"
+              id="video_url"
+              name="video_url"
+              maxlength="500"
+              class="form-input"
+              placeholder="https://www.youtube.com/watch?v=VIDEO_ID or https://vimeo.com/VIDEO_ID"
+            />
+            <p class="form-hint">YouTube or Vimeo URL (will be converted to embed format)</p>
+          </div>
+
+          <div class="form-group">
+            <label for="duration_seconds" class="form-label">Duration (seconds)</label>
+            <input
+              type="number"
+              id="duration_seconds"
+              name="duration_seconds"
+              min="0"
+              max="3600"
+              value="180"
+              class="form-input"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="display_order" class="form-label">Display Order</label>
+            <input
+              type="number"
+              id="display_order"
+              name="display_order"
+              min="0"
+              max="1000"
+              value="10"
+              class="form-input"
+            />
+          </div>
+
+          <div class="form-group full-width">
+            <label for="cover_image_url" class="form-label">Cover Image URL</label>
+            <input
+              type="url"
+              id="cover_image_url"
+              name="cover_image_url"
+              maxlength="500"
+              class="form-input"
+              placeholder="https://example.com/cover.jpg"
+            />
+            <p class="form-hint">Optional thumbnail/cover art for the sample</p>
+          </div>
+
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input
+                type="checkbox"
+                id="is_featured"
+                name="is_featured"
+                class="checkbox-input"
+              />
+              <span>Featured (display prominently)</span>
+            </label>
+          </div>
+
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input
+                type="checkbox"
+                id="is_active"
+                name="is_active"
+                checked
+                class="checkbox-input"
+              />
+              <span>Active (visible to customers)</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" id="cancel-btn">Cancel</button>
+          <button type="submit" class="btn-primary" id="submit-btn">
+            <span id="submit-text">Create Sample</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</AdminLayout>
+
+<style>
+  :root {
+    --admin-black: #0A0A0A;
+    --admin-card: #111111;
+    --admin-cream: #F5F5F5;
+    --gold: #D4AF37;
+  }
+
+  .font-display { font-family: 'Playfair Display', serif; }
+
+  .action-btn.primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    background: linear-gradient(135deg, var(--gold) 0%, #B8962E 100%);
+    color: var(--admin-black);
+    font-weight: 600;
+    border-radius: 0.5rem;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .action-btn.primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 20px rgba(212, 175, 55, 0.3);
+  }
+
+  .samples-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    gap: 1.5rem;
+  }
+
+  .sample-card {
+    background: var(--admin-card);
+    border: 1px solid rgba(212, 175, 55, 0.1);
+    border-radius: 1rem;
+    overflow: hidden;
+    transition: all 0.2s ease;
+  }
+
+  .sample-card.inactive {
+    opacity: 0.5;
+  }
+
+  .sample-card:hover {
+    border-color: rgba(212, 175, 55, 0.3);
+    transform: translateY(-2px);
+  }
+
+  .sample-cover {
+    width: 100%;
+    aspect-ratio: 16/9;
+    overflow: hidden;
+    background: rgba(0, 0, 0, 0.3);
+  }
+
+  .sample-cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .card-content {
+    padding: 1.5rem;
+  }
+
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 1rem;
+  }
+
+  .badges {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .badge {
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .badge.occasion {
+    background: rgba(212, 175, 55, 0.15);
+    color: var(--gold);
+    border: 1px solid rgba(212, 175, 55, 0.3);
+  }
+
+  .badge.featured {
+    background: rgba(168, 85, 247, 0.15);
+    color: #a855f7;
+    border: 1px solid rgba(168, 85, 247, 0.3);
+  }
+
+  .sample-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.25rem;
+    color: var(--admin-cream);
+    margin-bottom: 0.25rem;
+  }
+
+  .sample-genre {
+    color: rgba(212, 175, 55, 0.7);
+    font-size: 0.875rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .sample-description {
+    color: rgba(245, 245, 245, 0.5);
+    font-size: 0.875rem;
+    line-height: 1.5;
+    margin-bottom: 1rem;
+  }
+
+  /* Media Preview */
+  .video-preview {
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 0.75rem;
+    padding: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .video-embed-container {
+    position: relative;
+    width: 100%;
+    padding-bottom: 56.25%; /* 16:9 aspect ratio */
+    margin-bottom: 0.75rem;
+    border-radius: 0.5rem;
+    overflow: hidden;
+  }
+
+  .video-iframe {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 0.5rem;
+  }
+
+  .media-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+  }
+
+  /* Audio Preview */
+  .audio-preview {
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 0.75rem;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+  }
+
+  .play-btn {
+    flex-shrink: 0;
+    width: 3rem;
+    height: 3rem;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--gold) 0%, #B8962E 100%);
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: var(--admin-black);
+  }
+
+  .play-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 15px rgba(212, 175, 55, 0.4);
+  }
+
+  .play-icon, .pause-icon {
+    pointer-events: none;
+  }
+
+  .audio-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .progress-bar {
+    height: 0.375rem;
+    background: rgba(245, 245, 245, 0.1);
+    border-radius: 9999px;
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+    cursor: pointer;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: var(--gold);
+    transition: width 0.1s ease;
+  }
+
+  .audio-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+  }
+
+  .duration {
+    color: rgba(245, 245, 245, 0.7);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .source-type {
+    color: rgba(245, 245, 245, 0.4);
+  }
+
+  .sample-meta {
+    padding: 0.75rem;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .meta-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+  }
+
+  .meta-label {
+    color: rgba(245, 245, 245, 0.4);
+  }
+
+  .meta-value {
+    color: rgba(245, 245, 245, 0.7);
+  }
+
+  .card-actions {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .btn-edit, .btn-delete {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    padding: 0.625rem 1rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid;
+  }
+
+  .btn-edit {
+    background: rgba(212, 175, 55, 0.1);
+    border-color: rgba(212, 175, 55, 0.2);
+    color: var(--gold);
+  }
+
+  .btn-edit:hover {
+    background: rgba(212, 175, 55, 0.2);
+  }
+
+  .btn-delete {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.2);
+    color: #f87171;
+  }
+
+  .btn-delete:hover {
+    background: rgba(239, 68, 68, 0.2);
+  }
+
+  .toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 2.5rem;
+    height: 1.25rem;
+  }
+
+  .toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+
+  .toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    inset: 0;
+    background: rgba(245, 245, 245, 0.1);
+    border-radius: 9999px;
+    transition: 0.3s;
+  }
+
+  .toggle-slider::before {
+    position: absolute;
+    content: "";
+    height: 1rem;
+    width: 1rem;
+    left: 2px;
+    bottom: 2px;
+    background: rgba(245, 245, 245, 0.5);
+    border-radius: 50%;
+    transition: 0.3s;
+  }
+
+  input:checked + .toggle-slider {
+    background: rgba(16, 185, 129, 0.3);
+  }
+
+  input:checked + .toggle-slider::before {
+    background: #10b981;
+    transform: translateX(1.25rem);
+  }
+
+  input:disabled + .toggle-slider {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4rem 2rem;
+    text-align: center;
+  }
+
+  /* Modal Styles */
+  .modal {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+  }
+
+  .modal.open {
+    display: flex;
+  }
+
+  .modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(4px);
+  }
+
+  .modal-container {
+    position: relative;
+    width: 100%;
+    max-width: 800px;
+    max-height: 90vh;
+    background: var(--admin-card);
+    border: 1px solid rgba(212, 175, 55, 0.2);
+    border-radius: 1rem;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.5rem;
+    border-bottom: 1px solid rgba(212, 175, 55, 0.1);
+  }
+
+  .modal-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.5rem;
+    color: var(--admin-cream);
+  }
+
+  .modal-close {
+    padding: 0.5rem;
+    background: none;
+    border: none;
+    color: rgba(245, 245, 245, 0.5);
+    cursor: pointer;
+    border-radius: 0.375rem;
+    transition: all 0.2s ease;
+  }
+
+  .modal-close:hover {
+    background: rgba(212, 175, 55, 0.1);
+    color: var(--gold);
+  }
+
+  .modal-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem;
+  }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.25rem;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .form-group.full-width {
+    grid-column: span 2;
+  }
+
+  .form-label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: rgba(245, 245, 245, 0.7);
+  }
+
+  .form-input, .form-textarea, .form-select {
+    padding: 0.75rem;
+    background: var(--admin-black);
+    border: 1px solid rgba(212, 175, 55, 0.2);
+    border-radius: 0.5rem;
+    color: var(--admin-cream);
+    font-size: 0.875rem;
+    transition: all 0.2s ease;
+  }
+
+  .form-input:focus, .form-textarea:focus, .form-select:focus {
+    outline: none;
+    border-color: var(--gold);
+    box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.1);
+  }
+
+  .form-hint {
+    font-size: 0.75rem;
+    color: rgba(245, 245, 245, 0.4);
+  }
+
+  .radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .radio-label, .checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+  }
+
+  .radio-input, .checkbox-input {
+    width: 1.25rem;
+    height: 1.25rem;
+    cursor: pointer;
+  }
+
+  .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid rgba(212, 175, 55, 0.1);
+  }
+
+  .btn-secondary, .btn-primary {
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.5rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .btn-secondary {
+    background: transparent;
+    border: 1px solid rgba(212, 175, 55, 0.2);
+    color: rgba(245, 245, 245, 0.7);
+  }
+
+  .btn-secondary:hover {
+    background: rgba(212, 175, 55, 0.05);
+    color: var(--admin-cream);
+  }
+
+  .btn-primary {
+    background: linear-gradient(135deg, var(--gold) 0%, #B8962E 100%);
+    border: none;
+    color: var(--admin-black);
+  }
+
+  .btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 15px rgba(212, 175, 55, 0.3);
+  }
+
+  .btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  @media (max-width: 768px) {
+    .form-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .form-group.full-width {
+      grid-column: span 1;
+    }
+
+    .samples-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+
+<script>
+  // Audio player management
+  let currentlyPlaying: { audio: HTMLAudioElement; player: HTMLElement } | null = null;
+
+  function formatTime(seconds: number): string {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  }
+
+  document.querySelectorAll('.audio-preview').forEach(preview => {
+    const audio = preview.querySelector('audio') as HTMLAudioElement;
+    const playBtn = preview.querySelector('.play-btn') as HTMLButtonElement;
+    const playIcon = preview.querySelector('.play-icon') as SVGElement;
+    const pauseIcon = preview.querySelector('.pause-icon') as SVGElement;
+    const progressBar = preview.querySelector('.progress-bar') as HTMLElement;
+    const progressFill = preview.querySelector('.progress-fill') as HTMLElement;
+
+    if (!audio || !playBtn) return;
+
+    playBtn.addEventListener('click', () => {
+      if (audio.paused) {
+        // Pause any currently playing audio
+        if (currentlyPlaying && currentlyPlaying.audio !== audio) {
+          currentlyPlaying.audio.pause();
+          const prevPlayIcon = currentlyPlaying.player.querySelector('.play-icon');
+          const prevPauseIcon = currentlyPlaying.player.querySelector('.pause-icon');
+          prevPlayIcon?.classList.remove('hidden');
+          prevPauseIcon?.classList.add('hidden');
+        }
+
+        audio.play();
+        currentlyPlaying = { audio, player: preview as HTMLElement };
+        playIcon.classList.add('hidden');
+        pauseIcon.classList.remove('hidden');
+      } else {
+        audio.pause();
+        playIcon.classList.remove('hidden');
+        pauseIcon.classList.add('hidden');
+      }
+    });
+
+    audio.addEventListener('timeupdate', () => {
+      if (audio.duration) {
+        const percent = (audio.currentTime / audio.duration) * 100;
+        progressFill.style.width = `${percent}%`;
+      }
+    });
+
+    progressBar.addEventListener('click', (e) => {
+      const rect = progressBar.getBoundingClientRect();
+      const percent = (e.clientX - rect.left) / rect.width;
+      audio.currentTime = percent * audio.duration;
+    });
+
+    audio.addEventListener('ended', () => {
+      playIcon.classList.remove('hidden');
+      pauseIcon.classList.add('hidden');
+      progressFill.style.width = '0%';
+      currentlyPlaying = null;
+    });
+  });
+
+  // Helper: Get CSRF token from cookie (always use current value)
+  const getCSRFToken = () => {
+    const match = document.cookie.match(/(?:^|;\s*)csrf-token=([^;]*)/);
+    return match ? decodeURIComponent(match[1]) : '';
+  };
+
+  // Toggle active status
+  const toggleInputs = document.querySelectorAll('.toggle-active');
+
+  toggleInputs.forEach(input => {
+    input.addEventListener('change', async (e) => {
+      const target = e.target as HTMLInputElement;
+      const id = target.dataset.id;
+      const table = target.dataset.table;
+      const isActive = target.checked;
+      const csrfToken = getCSRFToken();
+
+      try {
+        const response = await fetch('/api/admin/content/toggle-active', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ id, table, is_active: isActive, csrf_token: csrfToken }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to update');
+        }
+
+        const card = target.closest('.sample-card');
+        if (card) {
+          if (isActive) {
+            card.classList.remove('inactive');
+          } else {
+            card.classList.add('inactive');
+          }
+        }
+      } catch (error) {
+        console.error('Error toggling active status:', error);
+        target.checked = !isActive;
+        alert('Failed to update status. Please try again.');
+      }
+    });
+  });
+
+  // Media type toggle functionality
+  const mediaTypeRadios = document.querySelectorAll('input[name="media_type"]');
+  const audioUrlGroup = document.getElementById('audio-url-group');
+  const videoUrlGroup = document.getElementById('video-url-group');
+  const audioUrlInput = document.getElementById('audio_url') as HTMLInputElement;
+  const videoUrlInput = document.getElementById('video_url') as HTMLInputElement;
+
+  mediaTypeRadios.forEach(radio => {
+    radio.addEventListener('change', (e) => {
+      const value = (e.target as HTMLInputElement).value;
+      if (value === 'audio') {
+        audioUrlGroup?.classList.remove('hidden');
+        videoUrlGroup?.classList.add('hidden');
+        audioUrlInput.required = true;
+        videoUrlInput.required = false;
+      } else {
+        audioUrlGroup?.classList.add('hidden');
+        videoUrlGroup?.classList.remove('hidden');
+        audioUrlInput.required = false;
+        videoUrlInput.required = true;
+      }
+    });
+  });
+
+  // Modal handling
+  const modal = document.getElementById('sample-modal');
+  const addBtn = document.getElementById('add-sample-btn');
+  const closeBtn = document.getElementById('close-modal');
+  const cancelBtn = document.getElementById('cancel-btn');
+  const form = document.getElementById('sample-form') as HTMLFormElement;
+  const modalTitle = document.getElementById('modal-title');
+  const submitText = document.getElementById('submit-text');
+
+  let editMode = false;
+
+  function openModal(sampleId?: string) {
+    if (sampleId) {
+      editMode = true;
+      modalTitle!.textContent = 'Edit Sample';
+      submitText!.textContent = 'Update Sample';
+      loadSampleData(sampleId);
+    } else {
+      editMode = false;
+      modalTitle!.textContent = 'Add New Sample';
+      submitText!.textContent = 'Create Sample';
+      form.reset();
+      (document.getElementById('sample-id') as HTMLInputElement).value = '';
+    }
+    modal?.classList.add('open');
+  }
+
+  function closeModal() {
+    modal?.classList.remove('open');
+    form.reset();
+  }
+
+  async function loadSampleData(id: string) {
+    // In production, fetch from API endpoint
+    (document.getElementById('sample-id') as HTMLInputElement).value = id;
+    // TODO: Populate form fields from sample data
+  }
+
+  addBtn?.addEventListener('click', () => openModal());
+  closeBtn?.addEventListener('click', closeModal);
+  cancelBtn?.addEventListener('click', closeModal);
+
+  document.querySelectorAll('.btn-edit').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const id = (e.currentTarget as HTMLElement).dataset.id;
+      if (id) openModal(id);
+    });
+  });
+
+  document.querySelectorAll('.btn-delete').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const target = e.currentTarget as HTMLElement;
+      const id = target.dataset.id;
+      const title = target.dataset.title;
+
+      if (!confirm(`Are you sure you want to delete "${title}"? This action cannot be undone.`)) {
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/admin/content/samples/delete`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ id, csrf_token: getCSRFToken() }),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || 'Failed to delete');
+        }
+
+        window.location.reload();
+      } catch (error) {
+        alert(error instanceof Error ? error.message : 'Failed to delete sample');
+      }
+    });
+  });
+
+  // Form submission
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const submitBtn = document.getElementById('submit-btn') as HTMLButtonElement;
+    const originalText = submitText!.textContent;
+
+    submitBtn.disabled = true;
+    submitText!.textContent = editMode ? 'Updating...' : 'Creating...';
+
+    const formData = new FormData(form);
+    const data: any = {};
+    formData.forEach((value, key) => {
+      if (key === 'is_active' || key === 'is_featured') {
+        data[key] = (document.getElementById(key) as HTMLInputElement).checked;
+      } else if (key === 'duration_seconds' || key === 'display_order') {
+        data[key] = parseInt(value as string, 10);
+      } else if (key === 'media_type') {
+        data[key] = (document.querySelector('input[name="media_type"]:checked') as HTMLInputElement)?.value || 'audio';
+      } else {
+        data[key] = value;
+      }
+    });
+
+    // Set audio_source_type based on media type
+    data.audio_source_type = 'url';
+
+    // Handle media-specific URLs
+    const mediaType = data.media_type || 'audio';
+    if (mediaType === 'video') {
+      data.audio_url = data.video_url || '';
+    }
+
+    data.csrf_token = getCSRFToken();
+
+    try {
+      const endpoint = editMode ? '/api/admin/content/samples/update' : '/api/admin/content/samples/create';
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(data),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to save');
+      }
+
+      window.location.reload();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to save sample');
+      submitBtn.disabled = false;
+      submitText!.textContent = originalText;
+    }
+  });
+</script>

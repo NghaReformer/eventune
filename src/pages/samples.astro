@@ -1,7 +1,7 @@
 ---
 /**
  * Samples Page
- * Portfolio of sample songs with audio player
+ * Portfolio of sample songs with audio and video player
  */
 
 import PublicLayout from '@/layouts/PublicLayout.astro';
@@ -31,10 +31,15 @@ try {
     {
       id: '1',
       title: 'Forever Starts Today',
-      occasion: 'wedding',
+      occasion_slug: 'wedding',
       genre: 'Pop Ballad',
+      style: null,
       description: 'A heartfelt first dance song celebrating the beginning of a beautiful journey together.',
       audio_url: '/samples/wedding-sample-1.mp3',
+      audio_source_type: 'url' as const,
+      video_url: null,
+      media_type: 'audio' as const,
+      cover_image_url: null,
       duration_seconds: 195,
       is_featured: true,
       is_active: true,
@@ -45,10 +50,15 @@ try {
     {
       id: '2',
       title: 'Twenty-Five Years',
-      occasion: 'anniversary',
+      occasion_slug: 'anniversary',
       genre: 'Soul',
+      style: null,
       description: 'A silver anniversary celebration capturing 25 years of love, laughter, and memories.',
       audio_url: '/samples/anniversary-sample-1.mp3',
+      audio_source_type: 'url' as const,
+      video_url: null,
+      media_type: 'audio' as const,
+      cover_image_url: null,
       duration_seconds: 210,
       is_featured: true,
       is_active: true,
@@ -56,74 +66,19 @@ try {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     },
-    {
-      id: '3',
-      title: "Happy Birthday, Mom",
-      occasion: 'birthday',
-      genre: 'Acoustic',
-      description: "A touching tribute to a mother's love, created as a surprise 60th birthday gift.",
-      audio_url: '/samples/birthday-sample-1.mp3',
-      duration_seconds: 180,
-      is_featured: true,
-      is_active: true,
-      display_order: 3,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    {
-      id: '4',
-      title: 'The Next Chapter',
-      occasion: 'graduation',
-      genre: 'Inspirational Pop',
-      description: 'An uplifting graduation anthem celebrating achievements and the exciting road ahead.',
-      audio_url: '/samples/graduation-sample-1.mp3',
-      duration_seconds: 200,
-      is_featured: false,
-      is_active: true,
-      display_order: 4,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    {
-      id: '5',
-      title: 'Love Like Ours',
-      occasion: 'wedding',
-      genre: 'R&B',
-      description: 'A smooth R&B wedding song that tells the story of two souls finding each other.',
-      audio_url: '/samples/wedding-sample-2.mp3',
-      duration_seconds: 225,
-      is_featured: false,
-      is_active: true,
-      display_order: 5,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    {
-      id: '6',
-      title: 'Through All The Years',
-      occasion: 'anniversary',
-      genre: 'Country',
-      description: 'A country-styled anniversary song celebrating the ups and downs of a beautiful marriage.',
-      audio_url: '/samples/anniversary-sample-2.mp3',
-      duration_seconds: 190,
-      is_featured: false,
-      is_active: true,
-      display_order: 6,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
   ] as Sample[];
 
   occasions = [
-    { id: '1', slug: 'wedding', name: 'Wedding', tagline: '', icon: 'heart', description: '', meta_title: '', meta_description: '', display_order: 1, is_active: true, created_at: '', updated_at: '' },
-    { id: '2', slug: 'birthday', name: 'Birthday', tagline: '', icon: 'cake', description: '', meta_title: '', meta_description: '', display_order: 2, is_active: true, created_at: '', updated_at: '' },
-    { id: '3', slug: 'anniversary', name: 'Anniversary', tagline: '', icon: 'rings', description: '', meta_title: '', meta_description: '', display_order: 3, is_active: true, created_at: '', updated_at: '' },
-    { id: '4', slug: 'graduation', name: 'Graduation', tagline: '', icon: 'cap', description: '', meta_title: '', meta_description: '', display_order: 4, is_active: true, created_at: '', updated_at: '' },
+    { id: '1', slug: 'wedding', name: 'Wedding', tagline: 'The First Dance They\'ll Never Forget', icon: '💒', description: '', meta_title: '', meta_description: '', display_order: 1, is_active: true, created_at: new Date().toISOString(), updated_at: null },
+    { id: '2', slug: 'birthday', name: 'Birthday', tagline: 'A Gift That Sings Their Story', icon: '🎂', description: '', meta_title: '', meta_description: '', display_order: 2, is_active: true, created_at: new Date().toISOString(), updated_at: null },
+    { id: '3', slug: 'anniversary', name: 'Anniversary', tagline: 'Celebrate Your Journey in Song', icon: '💍', description: '', meta_title: '', meta_description: '', display_order: 3, is_active: true, created_at: new Date().toISOString(), updated_at: null },
+    { id: '4', slug: 'graduation', name: 'Graduation', tagline: 'A Musical Milestone', icon: '🎓', description: '', meta_title: '', meta_description: '', display_order: 4, is_active: true, created_at: new Date().toISOString(), updated_at: null },
   ] as Occasion[];
 }
 
 // Format duration to mm:ss
-const formatDuration = (seconds: number) => {
+const formatDuration = (seconds: number | null) => {
+  if (!seconds) return '--:--';
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
   return `${mins}:${secs.toString().padStart(2, '0')}`;
@@ -135,8 +90,38 @@ const occasionMap = occasions.reduce((acc, occ) => {
   return acc;
 }, {} as Record<string, string>);
 
+// Helper to get occasion name from slug
+const getOccasionName = (slug: string | null) => {
+  if (!slug) return 'Other';
+  return occasionMap[slug] || slug;
+};
+
+// Convert video URL to embed URL
+const getEmbedUrl = (url: string | null): string | null => {
+  if (!url) return null;
+
+  // YouTube - handle various URL formats
+  const youtubeMatch = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+  if (youtubeMatch) {
+    return `https://www.youtube.com/embed/${youtubeMatch[1]}`;
+  }
+
+  // Vimeo
+  const vimeoMatch = url.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+  if (vimeoMatch) {
+    return `https://player.vimeo.com/video/${vimeoMatch[1]}`;
+  }
+
+  // Already an embed URL or other format
+  return url;
+};
+
 // Group samples by occasion for filtering
 const occasionFilters = ['all', ...occasions.map((o) => o.slug)];
+
+// Separate audio and video samples
+const audioSamples = samples.filter(s => s.media_type !== 'video');
+const videoSamples = samples.filter(s => s.media_type === 'video');
 ---
 
 <PublicLayout
@@ -184,12 +169,18 @@ const occasionFilters = ['all', ...occasions.map((o) => o.slug)];
           <Card
             variant="elevated"
             class="sample-card"
-            data-occasion={sample.occasion}
+            data-occasion={sample.occasion_slug || 'other'}
+            data-media-type={sample.media_type || 'audio'}
           >
             <!-- Badge -->
             <div class="flex items-center justify-between mb-4">
-              <Badge variant="gold">{occasionMap[sample.occasion] || sample.occasion}</Badge>
-              <span class="text-sm text-text-muted">{sample.genre}</span>
+              <Badge variant="gold">{getOccasionName(sample.occasion_slug)}</Badge>
+              <div class="flex items-center gap-2">
+                {sample.media_type === 'video' && (
+                  <span class="text-xs bg-red-600 text-white px-2 py-0.5 rounded">VIDEO</span>
+                )}
+                <span class="text-sm text-text-muted">{sample.genre || sample.style}</span>
+              </div>
             </div>
 
             <!-- Title & Description -->
@@ -200,40 +191,55 @@ const occasionFilters = ['all', ...occasions.map((o) => o.slug)];
               {sample.description}
             </p>
 
-            <!-- Audio Player -->
-            <div class="audio-player bg-primary-hoverBlack rounded-lg p-4" data-audio-url={sample.audio_url}>
-              <div class="flex items-center gap-4">
-                <!-- Play/Pause Button -->
-                <button
-                  type="button"
-                  class="play-btn w-12 h-12 flex-shrink-0 rounded-full bg-accent-gold flex items-center justify-center hover:bg-accent-goldHover transition-colors"
-                  aria-label="Play"
-                >
-                  <svg class="play-icon w-5 h-5 text-primary-black ml-0.5" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M8 5v14l11-7z" />
-                  </svg>
-                  <svg class="pause-icon w-5 h-5 text-primary-black hidden" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
-                  </svg>
-                </button>
+            {/* Video Player */}
+            {sample.media_type === 'video' && sample.video_url ? (
+              <div class="video-player rounded-lg overflow-hidden aspect-video bg-primary-hoverBlack">
+                <iframe
+                  src={getEmbedUrl(sample.video_url)}
+                  class="w-full h-full"
+                  frameborder="0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowfullscreen
+                  loading="lazy"
+                  title={sample.title}
+                />
+              </div>
+            ) : (
+              /* Audio Player */
+              <div class="audio-player bg-primary-hoverBlack rounded-lg p-4" data-audio-url={sample.audio_url}>
+                <div class="flex items-center gap-4">
+                  {/* Play/Pause Button */}
+                  <button
+                    type="button"
+                    class="play-btn w-12 h-12 flex-shrink-0 rounded-full bg-accent-gold flex items-center justify-center hover:bg-accent-goldHover transition-colors"
+                    aria-label="Play"
+                  >
+                    <svg class="play-icon w-5 h-5 text-primary-black ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M8 5v14l11-7z" />
+                    </svg>
+                    <svg class="pause-icon w-5 h-5 text-primary-black hidden" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+                    </svg>
+                  </button>
 
-                <!-- Progress & Time -->
-                <div class="flex-1">
-                  <div class="progress-bar h-2 bg-text-muted/30 rounded-full cursor-pointer overflow-hidden">
-                    <div class="progress-fill h-full bg-accent-gold w-0 transition-all"></div>
-                  </div>
-                  <div class="flex justify-between mt-1">
-                    <span class="current-time text-xs text-text-muted">0:00</span>
-                    <span class="total-time text-xs text-text-muted">{formatDuration(sample.duration_seconds)}</span>
+                  {/* Progress & Time */}
+                  <div class="flex-1">
+                    <div class="progress-bar h-2 bg-text-muted/30 rounded-full cursor-pointer overflow-hidden">
+                      <div class="progress-fill h-full bg-accent-gold w-0 transition-all"></div>
+                    </div>
+                    <div class="flex justify-between mt-1">
+                      <span class="current-time text-xs text-text-muted">0:00</span>
+                      <span class="total-time text-xs text-text-muted">{formatDuration(sample.duration_seconds)}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <!-- Audio Element -->
-              <audio class="hidden" preload="metadata">
-                <source src={sample.audio_url} type="audio/mpeg" />
-              </audio>
-            </div>
+                {/* Audio Element */}
+                <audio class="hidden" preload="metadata">
+                  <source src={sample.audio_url} type="audio/mpeg" />
+                </audio>
+              </div>
+            )}
           </Card>
         ))}
       </div>

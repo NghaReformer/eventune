@@ -49,6 +49,9 @@ export function initConfigRealtime(): void {
     'config_faq',
     'config_samples',
     'config_settings',
+    'config_video_products',
+    'config_addons',
+    'config_bundles',
   ] as const;
 
   realtimeChannel = browserClient.channel('config-changes');
@@ -504,7 +507,7 @@ export async function getSamples(
     }
 
     if (options.occasion) {
-      query = query.eq('occasion', options.occasion);
+      query = query.eq('occasion_slug', options.occasion);
     }
 
     if (options.limit) {
@@ -576,6 +579,185 @@ export async function isBookingEnabled(): Promise<boolean> {
 }
 
 // ============================================
+// VIDEO PRODUCTS
+// ============================================
+
+export type VideoProduct = Tables<'config_video_products'>;
+
+/**
+ * Get all active video products ordered by display_order
+ */
+export async function getVideoProducts(): Promise<VideoProduct[]> {
+  return getCached('video_products:active', async () => {
+    const supabase = getServerClient();
+    const { data, error } = await supabase
+      .from('config_video_products')
+      .select('*')
+      .eq('is_active', true)
+      .order('display_order');
+
+    if (error) throw error;
+    return data ?? [];
+  });
+}
+
+/**
+ * Get video products by category
+ */
+export async function getVideoProductsByCategory(
+  category: 'lyric_video' | 'music_video'
+): Promise<VideoProduct[]> {
+  const products = await getVideoProducts();
+  return products.filter((p) => p.category === category);
+}
+
+/**
+ * Get a single video product by slug
+ */
+export async function getVideoProductBySlug(slug: string): Promise<VideoProduct | null> {
+  return getCached(`video_products:${slug}`, async () => {
+    const supabase = getServerClient();
+    const { data, error } = await supabase
+      .from('config_video_products')
+      .select('*')
+      .eq('slug', slug)
+      .eq('is_active', true)
+      .single();
+
+    if (error && error.code !== 'PGRST116') throw error;
+    return data;
+  });
+}
+
+// ============================================
+// ADD-ONS
+// ============================================
+
+export type Addon = Tables<'config_addons'>;
+
+/**
+ * Get all active add-ons ordered by display_order
+ */
+export async function getAddons(): Promise<Addon[]> {
+  return getCached('addons:active', async () => {
+    const supabase = getServerClient();
+    const { data, error } = await supabase
+      .from('config_addons')
+      .select('*')
+      .eq('is_active', true)
+      .order('display_order');
+
+    if (error) throw error;
+    return data ?? [];
+  });
+}
+
+/**
+ * Get add-ons by category
+ */
+export async function getAddonsByCategory(
+  category: 'delivery' | 'revision' | 'license' | 'extra' | 'physical'
+): Promise<Addon[]> {
+  const addons = await getAddons();
+  return addons.filter((a) => a.category === category);
+}
+
+/**
+ * Get a single add-on by slug
+ */
+export async function getAddonBySlug(slug: string): Promise<Addon | null> {
+  return getCached(`addons:${slug}`, async () => {
+    const supabase = getServerClient();
+    const { data, error } = await supabase
+      .from('config_addons')
+      .select('*')
+      .eq('slug', slug)
+      .eq('is_active', true)
+      .single();
+
+    if (error && error.code !== 'PGRST116') throw error;
+    return data;
+  });
+}
+
+/**
+ * Calculate add-on price (handles both fixed and percentage pricing)
+ */
+export function calculateAddonPrice(
+  addon: Addon,
+  basePrice: number,
+  currency: 'USD' | 'XAF'
+): number {
+  if (addon.price_type === 'fixed') {
+    return currency === 'USD'
+      ? addon.price_usd ?? 0
+      : addon.price_xaf ?? 0;
+  } else {
+    // Percentage-based
+    return (basePrice * (addon.percentage ?? 0)) / 100;
+  }
+}
+
+// ============================================
+// BUNDLES
+// ============================================
+
+export type Bundle = Tables<'config_bundles'>;
+
+/**
+ * Get all active bundles ordered by display_order
+ */
+export async function getBundles(): Promise<Bundle[]> {
+  return getCached('bundles:active', async () => {
+    const supabase = getServerClient();
+    const { data, error } = await supabase
+      .from('config_bundles')
+      .select('*')
+      .eq('is_active', true)
+      .order('display_order');
+
+    if (error) throw error;
+    return data ?? [];
+  });
+}
+
+/**
+ * Get a single bundle by slug
+ */
+export async function getBundleBySlug(slug: string): Promise<Bundle | null> {
+  return getCached(`bundles:${slug}`, async () => {
+    const supabase = getServerClient();
+    const { data, error } = await supabase
+      .from('config_bundles')
+      .select('*')
+      .eq('slug', slug)
+      .eq('is_active', true)
+      .single();
+
+    if (error && error.code !== 'PGRST116') throw error;
+    return data;
+  });
+}
+
+/**
+ * Calculate bundle discount
+ */
+export function calculateBundlePrice(
+  bundle: Bundle,
+  singleSongPrice: number
+): { totalPrice: number; savings: number; originalPrice: number } {
+  const originalPrice = singleSongPrice * bundle.song_count;
+  const discountAmount = (originalPrice * bundle.discount_percentage) / 100;
+  const totalPrice = originalPrice - discountAmount;
+
+  return {
+    totalPrice,
+    savings: discountAmount,
+    originalPrice,
+  };
+}
+
+// ============================================
 // BULK FETCH FOR SSR
 // ============================================
 
@@ -589,21 +771,37 @@ export async function getPublicConfig(): Promise<{
   testimonials: Testimonial[];
   faqs: FAQ[];
   samples: Sample[];
+  videoProducts: VideoProduct[];
+  addons: Addon[];
+  bundles: Bundle[];
   settings: {
     maintenanceMode: { enabled: boolean; message: string };
     bookingEnabled: boolean;
   };
 }> {
-  const [packages, occasions, testimonials, faqs, samples, maintenanceMode, bookingEnabled] =
-    await Promise.all([
-      getPackages(),
-      getOccasions(),
-      getTestimonials({ featured: true }),
-      getFAQs('en'),
-      getSamples({ featured: true }),
-      isMaintenanceMode(),
-      isBookingEnabled(),
-    ]);
+  const [
+    packages,
+    occasions,
+    testimonials,
+    faqs,
+    samples,
+    videoProducts,
+    addons,
+    bundles,
+    maintenanceMode,
+    bookingEnabled,
+  ] = await Promise.all([
+    getPackages(),
+    getOccasions(),
+    getTestimonials({ featured: true }),
+    getFAQs('en'),
+    getSamples({ featured: true }),
+    getVideoProducts(),
+    getAddons(),
+    getBundles(),
+    isMaintenanceMode(),
+    isBookingEnabled(),
+  ]);
 
   return {
     packages,
@@ -611,6 +809,9 @@ export async function getPublicConfig(): Promise<{
     testimonials,
     faqs,
     samples,
+    videoProducts,
+    addons,
+    bundles,
     settings: {
       maintenanceMode,
       bookingEnabled,

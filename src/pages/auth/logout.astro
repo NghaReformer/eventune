@@ -16,20 +16,21 @@ Astro.cookies.delete('sb-refresh-token', { path: '/' });
   <title>Logging out...</title>
 </head>
 <body>
-  <script type="module">
-    import { supabase } from '@/lib/supabase/client';
-
-    async function logout() {
-      try {
-        await supabase.auth.signOut();
-      } catch (error) {
-        console.error('Logout error:', error);
-      } finally {
-        window.location.href = '/';
-      }
+  <script>
+    // Clear localStorage/sessionStorage Supabase data
+    try {
+      const keys = Object.keys(localStorage);
+      keys.forEach(key => {
+        if (key.startsWith('sb-') || key.includes('supabase')) {
+          localStorage.removeItem(key);
+        }
+      });
+    } catch (e) {
+      console.error('Error clearing storage:', e);
     }
 
-    logout();
+    // Redirect to home
+    window.location.href = '/';
   </script>
   <noscript>
     <meta http-equiv="refresh" content="0;url=/" />

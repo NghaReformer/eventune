@@ -7,12 +7,15 @@
  */
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import { getOrders } from '../../../services/admin.service';
-import { hasPermission } from '../../../lib/auth/admin-session';
-import type { AdminSessionData } from '../../../lib/auth/admin-session';
+import { hasPermission, getPermissionsForRole } from '../../../lib/auth/admin-session';
+import type { SessionData } from '../../../lib/auth/session';
 
-// Get admin session from layout
-const adminSession = Astro.locals.adminSession as AdminSessionData;
-const { permissions } = adminSession;
+// Get session from middleware (set before page runs)
+const session = Astro.locals.session as SessionData;
+const profile = session?.profile;
+const adminRole = profile?.admin_role as 'super_admin' | 'order_manager' | 'support' | null;
+const permissions = adminRole ? getPermissionsForRole(adminRole) : [];
+const csrfToken = Astro.locals.csrfToken as string;
 
 // Get query parameters for filters
 const url = Astro.url;
@@ -51,19 +54,19 @@ const statusOptions = [
   { value: 'cancelled', label: 'Cancelled' },
 ];
 
-// Status color mapping
-const statusColors: Record<string, { bg: string; text: string; dot: string }> = {
-  pending: { bg: 'bg-amber-500/10', text: 'text-amber-400', dot: 'bg-amber-400' },
-  payment_pending: { bg: 'bg-amber-500/10', text: 'text-amber-400', dot: 'bg-amber-400' },
-  paid: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', dot: 'bg-emerald-400' },
-  in_progress: { bg: 'bg-blue-500/10', text: 'text-blue-400', dot: 'bg-blue-400' },
-  composing: { bg: 'bg-blue-500/10', text: 'text-blue-400', dot: 'bg-blue-400' },
-  recording: { bg: 'bg-purple-500/10', text: 'text-purple-400', dot: 'bg-purple-400' },
-  mixing: { bg: 'bg-indigo-500/10', text: 'text-indigo-400', dot: 'bg-indigo-400' },
-  review: { bg: 'bg-cyan-500/10', text: 'text-cyan-400', dot: 'bg-cyan-400' },
-  completed: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', dot: 'bg-emerald-400' },
-  delivered: { bg: 'bg-gold/10', text: 'text-gold', dot: 'bg-gold' },
-  cancelled: { bg: 'bg-red-500/10', text: 'text-red-400', dot: 'bg-red-400' },
+// Status color mapping with inline styles
+const statusColors: Record<string, { bg: string; color: string }> = {
+  pending: { bg: 'rgba(245, 158, 11, 0.1)', color: '#FBBF24' },
+  payment_pending: { bg: 'rgba(245, 158, 11, 0.1)', color: '#FBBF24' },
+  paid: { bg: 'rgba(16, 185, 129, 0.1)', color: '#34D399' },
+  in_progress: { bg: 'rgba(59, 130, 246, 0.1)', color: '#60A5FA' },
+  composing: { bg: 'rgba(59, 130, 246, 0.1)', color: '#60A5FA' },
+  recording: { bg: 'rgba(139, 92, 246, 0.1)', color: '#A78BFA' },
+  mixing: { bg: 'rgba(99, 102, 241, 0.1)', color: '#818CF8' },
+  review: { bg: 'rgba(6, 182, 212, 0.1)', color: '#22D3EE' },
+  completed: { bg: 'rgba(16, 185, 129, 0.1)', color: '#34D399' },
+  delivered: { bg: 'rgba(212, 175, 55, 0.15)', color: '#D4AF37' },
+  cancelled: { bg: 'rgba(239, 68, 68, 0.1)', color: '#F87171' },
 };
 
 function getStatusColor(s: string) {
@@ -136,7 +139,7 @@ const paginationNumbers = getPaginationNumbers();
       />
       {search && (
         <a href={buildUrl({ search: '', page: 1 })} class="clear-search">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
           </svg>
         </a>
@@ -160,7 +163,7 @@ const paginationNumbers = getPaginationNumbers();
       <div class="filter-dropdown">
         <button class="filter-pill" id="more-filters-btn">
           More
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
           </svg>
         </button>
@@ -178,7 +181,7 @@ const paginationNumbers = getPaginationNumbers();
     <div class="filter-actions">
       {canExport && (
         <button id="export-btn" class="export-btn">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
           </svg>
           Export CSV
@@ -204,12 +207,12 @@ const paginationNumbers = getPaginationNumbers();
     {orders.length === 0 ? (
       <div class="empty-state">
         <div class="empty-icon">
-          <svg class="w-16 h-16 text-gold/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: rgba(212, 175, 55, 0.3);">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
           </svg>
         </div>
-        <h3 class="font-display text-xl text-admin-cream mb-2">No orders found</h3>
-        <p class="text-admin-cream/50 mb-4">
+        <h3 class="empty-title">No orders found</h3>
+        <p class="empty-desc">
           {search ? `No orders match "${search}"` : 'No orders in this category yet'}
         </p>
         {search && (
@@ -280,13 +283,13 @@ const paginationNumbers = getPaginationNumbers();
                   <span class="package-badge">{order.package_slug?.replace(/-/g, ' ') || 'N/A'}</span>
                 </td>
                 <td>
-                  <span class={`status-badge ${colors.bg} ${colors.text}`}>
-                    <span class={`status-dot ${colors.dot}`}></span>
+                  <span class="status-badge" style={`background: ${colors.bg}; color: ${colors.color};`}>
+                    <span class="status-dot" style={`background: ${colors.color};`}></span>
                     {order.status.replace(/_/g, ' ')}
                   </span>
                 </td>
                 <td>
-                  <span class={`payment-badge ${paymentColors.bg} ${paymentColors.text}`}>
+                  <span class="payment-badge" style={`background: ${order.payment_status === 'paid' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.1)'}; color: ${order.payment_status === 'paid' ? '#34D399' : '#FBBF24'};`}>
                     {order.payment_status}
                   </span>
                 </td>
@@ -299,7 +302,7 @@ const paginationNumbers = getPaginationNumbers();
                 <td>
                   <a href={`/admin/orders/${order.id}`} class="view-btn">
                     View
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                     </svg>
                   </a>
@@ -321,7 +324,7 @@ const paginationNumbers = getPaginationNumbers();
       <div class="pagination-controls">
         {page > 1 && (
           <a href={buildUrl({ page: page - 1 })} class="page-btn">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
             </svg>
             Previous
@@ -340,7 +343,7 @@ const paginationNumbers = getPaginationNumbers();
         {page < totalPages && (
           <a href={buildUrl({ page: page + 1 })} class="page-btn">
             Next
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
             </svg>
           </a>
@@ -796,6 +799,19 @@ const paginationNumbers = getPaginationNumbers();
 
   .empty-icon {
     margin-bottom: 1rem;
+  }
+
+  .empty-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.25rem;
+    color: var(--admin-cream);
+    margin: 0 0 0.5rem 0;
+  }
+
+  .empty-desc {
+    color: rgba(245, 245, 245, 0.5);
+    font-size: 0.875rem;
+    margin: 0 0 1rem 0;
   }
 
   .action-btn.secondary {

@@ -529,6 +529,7 @@ export type Database = {
           display_order: number;
           is_active: boolean;
           created_at: string;
+          updated_at: string | null;
         };
         Insert: {
           id?: string;
@@ -542,6 +543,7 @@ export type Database = {
           display_order?: number;
           is_active?: boolean;
           created_at?: string;
+          updated_at?: string | null;
         };
         Update: {
           id?: string;
@@ -555,6 +557,7 @@ export type Database = {
           display_order?: number;
           is_active?: boolean;
           created_at?: string;
+          updated_at?: string | null;
         };
       };
       config_payment_methods: {
@@ -769,40 +772,58 @@ export type Database = {
           id: string;
           title: string;
           description: string | null;
-          occasion: string;
-          style: string;
+          occasion_slug: string | null;
+          genre: string | null;
+          style: string | null; // deprecated, use genre
           audio_url: string;
-          duration_seconds: number;
+          audio_source_type: 'url' | 'embed';
+          video_url: string | null;
+          media_type: 'audio' | 'video';
+          cover_image_url: string | null;
+          duration_seconds: number | null;
           is_featured: boolean;
           is_active: boolean;
           display_order: number;
           created_at: string;
+          updated_at: string | null;
         };
         Insert: {
           id?: string;
           title: string;
           description?: string | null;
-          occasion: string;
-          style: string;
+          occasion_slug?: string | null;
+          genre?: string | null;
+          style?: string | null;
           audio_url: string;
-          duration_seconds?: number;
+          audio_source_type?: 'url' | 'embed';
+          video_url?: string | null;
+          media_type?: 'audio' | 'video';
+          cover_image_url?: string | null;
+          duration_seconds?: number | null;
           is_featured?: boolean;
           is_active?: boolean;
           display_order?: number;
           created_at?: string;
+          updated_at?: string | null;
         };
         Update: {
           id?: string;
           title?: string;
           description?: string | null;
-          occasion?: string;
-          style?: string;
+          occasion_slug?: string | null;
+          genre?: string | null;
+          style?: string | null;
           audio_url?: string;
-          duration_seconds?: number;
+          audio_source_type?: 'url' | 'embed';
+          video_url?: string | null;
+          media_type?: 'audio' | 'video';
+          cover_image_url?: string | null;
+          duration_seconds?: number | null;
           is_featured?: boolean;
           is_active?: boolean;
           display_order?: number;
           created_at?: string;
+          updated_at?: string | null;
         };
       };
       config_settings: {
@@ -827,6 +848,226 @@ export type Database = {
           key?: string;
           value?: string;
           description?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      config_video_products: {
+        Row: {
+          id: string;
+          slug: string;
+          name: string;
+          description: string | null;
+          category: 'lyric_video' | 'music_video';
+          price_usd: number;
+          price_xaf: number;
+          delivery_days_additional: number;
+          display_order: number;
+          is_active: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          slug: string;
+          name: string;
+          description?: string | null;
+          category: 'lyric_video' | 'music_video';
+          price_usd: number;
+          price_xaf: number;
+          delivery_days_additional?: number;
+          display_order?: number;
+          is_active?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          slug?: string;
+          name?: string;
+          description?: string | null;
+          category?: 'lyric_video' | 'music_video';
+          price_usd?: number;
+          price_xaf?: number;
+          delivery_days_additional?: number;
+          display_order?: number;
+          is_active?: boolean;
+          created_at?: string;
+        };
+      };
+      config_addons: {
+        Row: {
+          id: string;
+          slug: string;
+          name: string;
+          description: string | null;
+          category: 'delivery' | 'revision' | 'license' | 'extra' | 'physical';
+          price_type: 'fixed' | 'percentage';
+          price_usd: number | null;
+          price_xaf: number | null;
+          percentage: number | null;
+          display_order: number;
+          is_active: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          slug: string;
+          name: string;
+          description?: string | null;
+          category: 'delivery' | 'revision' | 'license' | 'extra' | 'physical';
+          price_type: 'fixed' | 'percentage';
+          price_usd?: number | null;
+          price_xaf?: number | null;
+          percentage?: number | null;
+          display_order?: number;
+          is_active?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          slug?: string;
+          name?: string;
+          description?: string | null;
+          category?: 'delivery' | 'revision' | 'license' | 'extra' | 'physical';
+          price_type?: 'fixed' | 'percentage';
+          price_usd?: number | null;
+          price_xaf?: number | null;
+          percentage?: number | null;
+          display_order?: number;
+          is_active?: boolean;
+          created_at?: string;
+        };
+      };
+      config_bundles: {
+        Row: {
+          id: string;
+          slug: string;
+          name: string;
+          description: string | null;
+          song_count: number;
+          discount_percentage: number;
+          display_order: number;
+          is_active: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          slug: string;
+          name: string;
+          description?: string | null;
+          song_count: number;
+          discount_percentage: number;
+          display_order?: number;
+          is_active?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          slug?: string;
+          name?: string;
+          description?: string | null;
+          song_count?: number;
+          discount_percentage?: number;
+          display_order?: number;
+          is_active?: boolean;
+          created_at?: string;
+        };
+      };
+      contact_submissions: {
+        Row: {
+          id: string;
+          first_name: string;
+          last_name: string;
+          email: string;
+          phone: string | null;
+          occasion: string | null;
+          message: string;
+          status: 'new' | 'read' | 'replied' | 'archived';
+          ip_address: string | null;
+          user_agent: string | null;
+          replied_at: string | null;
+          replied_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          first_name: string;
+          last_name: string;
+          email: string;
+          phone?: string | null;
+          occasion?: string | null;
+          message: string;
+          status?: 'new' | 'read' | 'replied' | 'archived';
+          ip_address?: string | null;
+          user_agent?: string | null;
+          replied_at?: string | null;
+          replied_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          first_name?: string;
+          last_name?: string;
+          email?: string;
+          phone?: string | null;
+          occasion?: string | null;
+          message?: string;
+          status?: 'new' | 'read' | 'replied' | 'archived';
+          ip_address?: string | null;
+          user_agent?: string | null;
+          replied_at?: string | null;
+          replied_by?: string | null;
+          created_at?: string;
+        };
+      };
+      config_questionnaire_fields: {
+        Row: {
+          id: string;
+          occasion_slug: string | null;
+          field_name: string;
+          field_type: 'text' | 'textarea' | 'select' | 'radio' | 'checkbox' | 'date' | 'number' | 'email' | 'phone';
+          field_label: string;
+          placeholder: string | null;
+          help_text: string | null;
+          required: boolean;
+          display_order: number;
+          options: Json | null;
+          field_group: 'recipient' | 'relationship' | 'memories' | 'song_preferences' | 'additional';
+          validation_rules: Json | null;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          occasion_slug?: string | null;
+          field_name: string;
+          field_type: 'text' | 'textarea' | 'select' | 'radio' | 'checkbox' | 'date' | 'number' | 'email' | 'phone';
+          field_label: string;
+          placeholder?: string | null;
+          help_text?: string | null;
+          required?: boolean;
+          display_order?: number;
+          options?: Json | null;
+          field_group?: 'recipient' | 'relationship' | 'memories' | 'song_preferences' | 'additional';
+          validation_rules?: Json | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          occasion_slug?: string | null;
+          field_name?: string;
+          field_type?: 'text' | 'textarea' | 'select' | 'radio' | 'checkbox' | 'date' | 'number' | 'email' | 'phone';
+          field_label?: string;
+          placeholder?: string | null;
+          help_text?: string | null;
+          required?: boolean;
+          display_order?: number;
+          options?: Json | null;
+          field_group?: 'recipient' | 'relationship' | 'memories' | 'song_preferences' | 'additional';
+          validation_rules?: Json | null;
+          is_active?: boolean;
           created_at?: string;
           updated_at?: string;
         };

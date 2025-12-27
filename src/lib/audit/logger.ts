@@ -18,14 +18,20 @@ export type AuditAction =
   | 'settings.update'
   | 'content.update'
   | 'content.toggle_active'
-  | 'content.delete';
+  | 'content.delete'
+  | 'occasion.create'
+  | 'occasion.update'
+  | 'occasion.delete'
+  | 'sample.create'
+  | 'sample.update'
+  | 'sample.delete';
 
-export type AuditResourceType = 'order' | 'customer' | 'analytics' | 'content' | 'settings';
+export type AuditResourceType = 'order' | 'customer' | 'analytics' | 'content' | 'settings' | 'occasion' | 'sample';
 
 export interface AuditLogParams {
   admin_id: string;
-  admin_email: string;
-  admin_role: string;
+  admin_email: string; // Not stored in DB, but kept for logging context
+  admin_role?: string; // Not stored in DB, but kept for logging context
   action: AuditAction;
   resource_type: AuditResourceType;
   resource_id: string;
@@ -36,22 +42,21 @@ export interface AuditLogParams {
 
 /**
  * Log an admin action to the audit trail
+ * Note: DB schema uses entity_type/entity_id and old_data/new_data columns
  */
 export async function logAdminAction(params: AuditLogParams): Promise<boolean> {
   try {
     const supabase = getServerClient();
 
+    // Map to actual database column names
     const { error } = await supabase.from('admin_audit_log').insert({
       admin_id: params.admin_id,
-      admin_email: params.admin_email,
-      admin_role: params.admin_role,
       action: params.action,
-      resource_type: params.resource_type,
-      resource_id: params.resource_id,
-      metadata: params.metadata || {},
+      entity_type: params.resource_type, // DB column name
+      entity_id: params.resource_id,     // DB column name
+      new_data: params.metadata || null, // Store metadata in new_data column
       ip_address: params.ip_address,
       user_agent: params.user_agent || null,
-      created_at: new Date().toISOString(),
     });
 
     if (error) {
@@ -80,8 +85,8 @@ export async function getAuditLogs(
   const { data, error } = await supabase
     .from('admin_audit_log')
     .select('*')
-    .eq('resource_type', resourceType)
-    .eq('resource_id', resourceId)
+    .eq('entity_type', resourceType)  // DB column name
+    .eq('entity_id', resourceId)      // DB column name
     .order('created_at', { ascending: false })
     .limit(limit);
 
@@ -90,7 +95,18 @@ export async function getAuditLogs(
     return [];
   }
 
-  return data || [];
+  // Map DB columns to interface
+  return (data || []).map(row => ({
+    id: row.id,
+    admin_id: row.admin_id,
+    action: row.action as AuditAction,
+    resource_type: row.entity_type as AuditResourceType,
+    resource_id: row.entity_id,
+    metadata: row.new_data as Record<string, unknown> || {},
+    ip_address: row.ip_address,
+    user_agent: row.user_agent,
+    created_at: row.created_at,
+  }));
 }
 
 /**
@@ -114,19 +130,28 @@ export async function getAuditLogsByAdmin(
     return [];
   }
 
-  return data || [];
+  // Map DB columns to interface
+  return (data || []).map(row => ({
+    id: row.id,
+    admin_id: row.admin_id,
+    action: row.action as AuditAction,
+    resource_type: row.entity_type as AuditResourceType,
+    resource_id: row.entity_id,
+    metadata: row.new_data as Record<string, unknown> || {},
+    ip_address: row.ip_address,
+    user_agent: row.user_agent,
+    created_at: row.created_at,
+  }));
 }
 
 export interface AuditLogEntry {
   id: string;
   admin_id: string;
-  admin_email: string;
-  admin_role: string;
   action: AuditAction;
   resource_type: AuditResourceType;
   resource_id: string;
   metadata: Record<string, unknown>;
-  ip_address: string;
+  ip_address: string | null;
   user_agent: string | null;
   created_at: string;
 }
@@ -149,6 +174,12 @@ export function formatAuditAction(action: AuditAction): string {
     'content.update': 'Updated content',
     'content.toggle_active': 'Toggled content status',
     'content.delete': 'Deleted content',
+    'occasion.create': 'Created occasion',
+    'occasion.update': 'Updated occasion',
+    'occasion.delete': 'Deleted occasion',
+    'sample.create': 'Created sample',
+    'sample.update': 'Updated sample',
+    'sample.delete': 'Deleted sample',
   };
 
   return actionLabels[action] || action;

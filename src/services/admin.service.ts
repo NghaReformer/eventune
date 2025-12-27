@@ -1435,7 +1435,14 @@ export async function getSiteSettings(): Promise<Record<string, any>> {
 
   const settings: Record<string, any> = {};
   for (const row of data) {
-    settings[row.key] = row.value;
+    // Try to parse JSON values (for booleans, numbers, objects)
+    try {
+      const parsed = JSON.parse(row.value);
+      settings[row.key] = parsed;
+    } catch {
+      // If not valid JSON, use the raw string value
+      settings[row.key] = row.value;
+    }
   }
   return settings;
 }
@@ -1454,16 +1461,1183 @@ export async function updateSiteSetting(
   }
 
   const supabase = getServerClient();
+
+  // Ensure value is stringified for storage (table column is text)
+  const stringValue = typeof value === 'string' ? value : JSON.stringify(value);
+
   const { error } = await supabase
     .from('config_settings')
-    .upsert({
-      key: sanitizedKey,
-      value,
-      updated_at: new Date().toISOString(),
-      updated_by: adminId,
-    });
+    .upsert(
+      {
+        key: sanitizedKey,
+        value: stringValue,
+        updated_at: new Date().toISOString(),
+      },
+      {
+        onConflict: 'key',  // Specify the unique column to match on
+      }
+    );
 
   if (error) {
+    console.error(`[Settings] Failed to update ${sanitizedKey}:`, error.message);
+    return { success: false, error: error.message };
+  }
+
+  console.log(`[Settings] Successfully updated ${sanitizedKey}:`, stringValue);
+  return { success: true };
+}
+
+// ============================================
+// OCCASIONS CRUD FUNCTIONS
+// ============================================
+
+export interface ConfigSample {
+  id: string;
+  title: string;
+  description: string | null;
+  occasion_slug: string | null;
+  genre: string | null;
+  audio_url: string;
+  audio_source_type: 'url' | 'embed';
+  video_url: string | null;
+  media_type: 'audio' | 'video';
+  cover_image_url: string | null;
+  duration_seconds: number | null;
+  is_featured: boolean;
+  is_active: boolean;
+  display_order: number;
+}
+
+/**
+ * Get all samples for content management
+ */
+export async function getContentSamples(): Promise<ConfigSample[]> {
+  const supabase = getServerClient();
+  const { data } = await supabase
+    .from('config_samples')
+    .select('*')
+    .order('display_order', { ascending: true });
+  return data || [];
+}
+
+/**
+ * Get single occasion by ID
+ */
+export async function getOccasionById(id: string): Promise<ConfigOccasion | null> {
+  if (!isValidUUID(id)) {
+    return null;
+  }
+
+  const supabase = getServerClient();
+  const { data, error } = await supabase
+    .from('config_occasions')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error || !data) {
+    return null;
+  }
+
+  return data;
+}
+
+/**
+ * Create new occasion
+ */
+export async function createOccasion(
+  occasion: Omit<ConfigOccasion, 'id' | 'created_at' | 'updated_at'>
+): Promise<{ success: boolean; error?: string; id?: string }> {
+  // Validate slug format
+  const slugRegex = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+  if (!slugRegex.test(occasion.slug)) {
+    return { success: false, error: 'Invalid slug format. Use lowercase letters, numbers, and hyphens only.' };
+  }
+
+  // Sanitize inputs
+  const sanitized = {
+    slug: sanitizeString(occasion.slug, 100),
+    name: sanitizeString(occasion.name, 100),
+    description: occasion.description ? sanitizeString(occasion.description, 500) : null,
+    tagline: occasion.tagline ? sanitizeString(occasion.tagline, 200) : null,
+    icon: occasion.icon ? sanitizeString(occasion.icon, 50) : null,
+    meta_title: occasion.meta_title ? sanitizeString(occasion.meta_title, 100) : null,
+    meta_description: occasion.meta_description ? sanitizeString(occasion.meta_description, 200) : null,
+    display_order: Math.max(0, Math.min(occasion.display_order, 1000)),
+    is_active: occasion.is_active,
+  };
+
+  const supabase = getServerClient();
+
+  // Check if slug already exists
+  const { data: existing } = await supabase
+    .from('config_occasions')
+    .select('id')
+    .eq('slug', sanitized.slug)
+    .single();
+
+  if (existing) {
+    return { success: false, error: 'An occasion with this slug already exists' };
+  }
+
+  // Insert
+  const { data, error } = await supabase
+    .from('config_occasions')
+    .insert(sanitized)
+    .select('id')
+    .single();
+
+  if (error) {
+    console.error('[ADMIN] Error creating occasion:', error);
+    return { success: false, error: error.message };
+  }
+
+  return { success: true, id: data?.id };
+}
+
+/**
+ * Update occasion
+ */
+export async function updateOccasion(
+  id: string,
+  occasion: Partial<Omit<ConfigOccasion, 'id' | 'created_at' | 'updated_at'>>
+): Promise<{ success: boolean; error?: string }> {
+  if (!isValidUUID(id)) {
+    return { success: false, error: 'Invalid ID' };
+  }
+
+  // Validate slug if provided
+  if (occasion.slug) {
+    const slugRegex = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+    if (!slugRegex.test(occasion.slug)) {
+      return { success: false, error: 'Invalid slug format' };
+    }
+  }
+
+  // Build sanitized update object
+  const updates: any = {};
+  if (occasion.slug) updates.slug = sanitizeString(occasion.slug, 100);
+  if (occasion.name) updates.name = sanitizeString(occasion.name, 100);
+  if (occasion.description !== undefined) {
+    updates.description = occasion.description ? sanitizeString(occasion.description, 500) : null;
+  }
+  if (occasion.tagline !== undefined) {
+    updates.tagline = occasion.tagline ? sanitizeString(occasion.tagline, 200) : null;
+  }
+  if (occasion.icon !== undefined) {
+    updates.icon = occasion.icon ? sanitizeString(occasion.icon, 50) : null;
+  }
+  if (occasion.meta_title !== undefined) {
+    updates.meta_title = occasion.meta_title ? sanitizeString(occasion.meta_title, 100) : null;
+  }
+  if (occasion.meta_description !== undefined) {
+    updates.meta_description = occasion.meta_description ? sanitizeString(occasion.meta_description, 200) : null;
+  }
+  if (occasion.display_order !== undefined) {
+    updates.display_order = Math.max(0, Math.min(occasion.display_order, 1000));
+  }
+  if (occasion.is_active !== undefined) {
+    updates.is_active = occasion.is_active;
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return { success: false, error: 'No fields to update' };
+  }
+
+  const supabase = getServerClient();
+
+  // Check slug uniqueness if updating slug
+  if (updates.slug) {
+    const { data: existing } = await supabase
+      .from('config_occasions')
+      .select('id')
+      .eq('slug', updates.slug)
+      .neq('id', id)
+      .single();
+
+    if (existing) {
+      return { success: false, error: 'An occasion with this slug already exists' };
+    }
+  }
+
+  const { error } = await supabase
+    .from('config_occasions')
+    .update(updates)
+    .eq('id', id);
+
+  if (error) {
+    console.error('[ADMIN] Error updating occasion:', error);
+    return { success: false, error: error.message };
+  }
+
+  return { success: true };
+}
+
+/**
+ * Delete occasion
+ */
+export async function deleteOccasion(id: string): Promise<{ success: boolean; error?: string }> {
+  if (!isValidUUID(id)) {
+    return { success: false, error: 'Invalid ID' };
+  }
+
+  const supabase = getServerClient();
+
+  // Check if occasion is used in orders
+  const occasion = await getOccasionById(id);
+  if (occasion) {
+    const { data: orders } = await supabase
+      .from('orders')
+      .select('id')
+      .eq('occasion_slug', occasion.slug)
+      .limit(1);
+
+    if (orders && orders.length > 0) {
+      return { success: false, error: 'Cannot delete occasion that is used in orders. Deactivate it instead.' };
+    }
+  }
+
+  const { error } = await supabase
+    .from('config_occasions')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error('[ADMIN] Error deleting occasion:', error);
+    return { success: false, error: error.message };
+  }
+
+  return { success: true };
+}
+
+// ============================================
+// SAMPLES CRUD FUNCTIONS
+// ============================================
+
+/**
+ * Get single sample by ID
+ */
+export async function getSampleById(id: string): Promise<ConfigSample | null> {
+  if (!isValidUUID(id)) {
+    return null;
+  }
+
+  const supabase = getServerClient();
+  const { data, error } = await supabase
+    .from('config_samples')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error || !data) {
+    return null;
+  }
+
+  return data;
+}
+
+/**
+ * Create new sample
+ */
+export async function createSample(
+  sample: Omit<ConfigSample, 'id' | 'created_at' | 'updated_at'>
+): Promise<{ success: boolean; error?: string; id?: string }> {
+  // Validate occasion exists if provided
+  const supabase = getServerClient();
+  if (sample.occasion_slug) {
+    const { data: occasion } = await supabase
+      .from('config_occasions')
+      .select('slug')
+      .eq('slug', sample.occasion_slug)
+      .single();
+
+    if (!occasion) {
+      return { success: false, error: 'Invalid occasion slug' };
+    }
+  }
+
+  // Validate audio source type
+  if (!['url', 'embed'].includes(sample.audio_source_type)) {
+    return { success: false, error: 'Invalid audio source type' };
+  }
+
+  // Validate media type
+  if (!['audio', 'video'].includes(sample.media_type)) {
+    return { success: false, error: 'Invalid media type' };
+  }
+
+  // Sanitize inputs
+  const sanitized = {
+    title: sanitizeString(sample.title, 200),
+    description: sample.description ? sanitizeString(sample.description, 1000) : null,
+    occasion_slug: sample.occasion_slug ? sanitizeString(sample.occasion_slug, 100) : null,
+    genre: sample.genre ? sanitizeString(sample.genre, 100) : null,
+    audio_url: sanitizeString(sample.audio_url, 500),
+    audio_source_type: sample.audio_source_type,
+    video_url: sample.video_url ? sanitizeString(sample.video_url, 500) : null,
+    media_type: sample.media_type,
+    cover_image_url: sample.cover_image_url ? sanitizeString(sample.cover_image_url, 500) : null,
+    duration_seconds: Math.max(0, Math.min(sample.duration_seconds, 3600)),
+    is_featured: sample.is_featured,
+    is_active: sample.is_active,
+    display_order: Math.max(0, Math.min(sample.display_order, 1000)),
+  };
+
+  // Insert
+  const { data, error } = await supabase
+    .from('config_samples')
+    .insert(sanitized)
+    .select('id')
+    .single();
+
+  if (error) {
+    console.error('[ADMIN] Error creating sample:', error);
+    return { success: false, error: error.message };
+  }
+
+  return { success: true, id: data?.id };
+}
+
+/**
+ * Update sample
+ */
+export async function updateSample(
+  id: string,
+  sample: Partial<Omit<ConfigSample, 'id' | 'created_at' | 'updated_at'>>
+): Promise<{ success: boolean; error?: string }> {
+  if (!isValidUUID(id)) {
+    return { success: false, error: 'Invalid ID' };
+  }
+
+  // Validate occasion if provided
+  if (sample.occasion_slug) {
+    const supabase = getServerClient();
+    const { data: occasion } = await supabase
+      .from('config_occasions')
+      .select('slug')
+      .eq('slug', sample.occasion_slug)
+      .single();
+
+    if (!occasion) {
+      return { success: false, error: 'Invalid occasion slug' };
+    }
+  }
+
+  // Validate audio source type if provided
+  if (sample.audio_source_type && !['url', 'embed'].includes(sample.audio_source_type)) {
+    return { success: false, error: 'Invalid audio source type' };
+  }
+
+  // Validate media type if provided
+  if (sample.media_type && !['audio', 'video'].includes(sample.media_type)) {
+    return { success: false, error: 'Invalid media type' };
+  }
+
+  // Build sanitized update object
+  const updates: any = {};
+  if (sample.title) updates.title = sanitizeString(sample.title, 200);
+  if (sample.description !== undefined) {
+    updates.description = sample.description ? sanitizeString(sample.description, 1000) : null;
+  }
+  if (sample.occasion_slug !== undefined) {
+    updates.occasion_slug = sample.occasion_slug ? sanitizeString(sample.occasion_slug, 100) : null;
+  }
+  if (sample.genre !== undefined) {
+    updates.genre = sample.genre ? sanitizeString(sample.genre, 100) : null;
+  }
+  if (sample.audio_url) updates.audio_url = sanitizeString(sample.audio_url, 500);
+  if (sample.audio_source_type) updates.audio_source_type = sample.audio_source_type;
+  if (sample.video_url !== undefined) {
+    updates.video_url = sample.video_url ? sanitizeString(sample.video_url, 500) : null;
+  }
+  if (sample.media_type) updates.media_type = sample.media_type;
+  if (sample.cover_image_url !== undefined) {
+    updates.cover_image_url = sample.cover_image_url ? sanitizeString(sample.cover_image_url, 500) : null;
+  }
+  if (sample.duration_seconds !== undefined) {
+    updates.duration_seconds = Math.max(0, Math.min(sample.duration_seconds, 3600));
+  }
+  if (sample.is_featured !== undefined) updates.is_featured = sample.is_featured;
+  if (sample.is_active !== undefined) updates.is_active = sample.is_active;
+  if (sample.display_order !== undefined) {
+    updates.display_order = Math.max(0, Math.min(sample.display_order, 1000));
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return { success: false, error: 'No fields to update' };
+  }
+
+  const supabase = getServerClient();
+  const { error } = await supabase
+    .from('config_samples')
+    .update(updates)
+    .eq('id', id);
+
+  if (error) {
+    console.error('[ADMIN] Error updating sample:', error);
+    return { success: false, error: error.message };
+  }
+
+  return { success: true };
+}
+
+/**
+ * Delete sample
+ */
+export async function deleteSample(id: string): Promise<{ success: boolean; error?: string }> {
+  if (!isValidUUID(id)) {
+    return { success: false, error: 'Invalid ID' };
+  }
+
+  const supabase = getServerClient();
+  const { error } = await supabase
+    .from('config_samples')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error('[ADMIN] Error deleting sample:', error);
+    return { success: false, error: error.message };
+  }
+
+  return { success: true };
+}
+
+// ============================================
+// PACKAGES CRUD FUNCTIONS
+// ============================================
+
+/**
+ * Create new package
+ */
+export async function createPackage(
+  pkg: Omit<ConfigPackage, 'id' | 'created_at' | 'updated_at'>
+): Promise<{ success: boolean; error?: string; id?: string }> {
+  // Validate slug format
+  const slugRegex = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+  if (!slugRegex.test(pkg.slug)) {
+    return { success: false, error: 'Invalid slug format. Use lowercase letters, numbers, and hyphens only.' };
+  }
+
+  // Validate prices
+  if (pkg.price_usd < 0 || pkg.price_xaf < 0) {
+    return { success: false, error: 'Prices must be positive' };
+  }
+
+  // Sanitize inputs
+  const sanitized = {
+    slug: sanitizeString(pkg.slug, 100),
+    name: sanitizeString(pkg.name, 100),
+    description: pkg.description ? sanitizeString(pkg.description, 500) : null,
+    price_usd: Math.max(0, pkg.price_usd),
+    price_xaf: Math.max(0, pkg.price_xaf),
+    song_length_min: Math.max(0, Math.min(pkg.song_length_min, 60)),
+    song_length_max: Math.max(0, Math.min(pkg.song_length_max, 60)),
+    delivery_days_min: Math.max(0, Math.min(pkg.delivery_days_min, 365)),
+    delivery_days_max: Math.max(0, Math.min(pkg.delivery_days_max, 365)),
+    revision_count: Math.max(0, Math.min(pkg.revision_count, 100)),
+    includes_discovery_call: pkg.includes_discovery_call,
+    includes_instrumental: pkg.includes_instrumental,
+    includes_full_rights: pkg.includes_full_rights,
+    is_popular: pkg.is_popular,
+    is_active: pkg.is_active,
+    display_order: Math.max(0, Math.min(pkg.display_order, 1000)),
+  };
+
+  const supabase = getServerClient();
+
+  // Check if slug already exists
+  const { data: existing } = await supabase
+    .from('config_packages')
+    .select('id')
+    .eq('slug', sanitized.slug)
+    .single();
+
+  if (existing) {
+    return { success: false, error: 'A package with this slug already exists' };
+  }
+
+  // Insert
+  const { data, error } = await supabase
+    .from('config_packages')
+    .insert(sanitized)
+    .select('id')
+    .single();
+
+  if (error) {
+    console.error('[ADMIN] Error creating package:', error);
+    return { success: false, error: error.message };
+  }
+
+  return { success: true, id: data?.id };
+}
+
+/**
+ * Update package
+ */
+export async function updatePackage(
+  id: string,
+  pkg: Partial<Omit<ConfigPackage, 'id' | 'created_at' | 'updated_at'>>
+): Promise<{ success: boolean; error?: string }> {
+  if (!isValidUUID(id)) {
+    return { success: false, error: 'Invalid ID' };
+  }
+
+  // Validate slug if provided
+  if (pkg.slug) {
+    const slugRegex = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+    if (!slugRegex.test(pkg.slug)) {
+      return { success: false, error: 'Invalid slug format' };
+    }
+  }
+
+  // Build sanitized update object
+  const updates: any = {};
+  if (pkg.slug) updates.slug = sanitizeString(pkg.slug, 100);
+  if (pkg.name) updates.name = sanitizeString(pkg.name, 100);
+  if (pkg.description !== undefined) {
+    updates.description = pkg.description ? sanitizeString(pkg.description, 500) : null;
+  }
+  if (pkg.price_usd !== undefined) updates.price_usd = Math.max(0, pkg.price_usd);
+  if (pkg.price_xaf !== undefined) updates.price_xaf = Math.max(0, pkg.price_xaf);
+  if (pkg.song_length_min !== undefined) updates.song_length_min = Math.max(0, Math.min(pkg.song_length_min, 60));
+  if (pkg.song_length_max !== undefined) updates.song_length_max = Math.max(0, Math.min(pkg.song_length_max, 60));
+  if (pkg.delivery_days_min !== undefined) updates.delivery_days_min = Math.max(0, Math.min(pkg.delivery_days_min, 365));
+  if (pkg.delivery_days_max !== undefined) updates.delivery_days_max = Math.max(0, Math.min(pkg.delivery_days_max, 365));
+  if (pkg.revision_count !== undefined) updates.revision_count = Math.max(0, Math.min(pkg.revision_count, 100));
+  if (pkg.includes_discovery_call !== undefined) updates.includes_discovery_call = pkg.includes_discovery_call;
+  if (pkg.includes_instrumental !== undefined) updates.includes_instrumental = pkg.includes_instrumental;
+  if (pkg.includes_full_rights !== undefined) updates.includes_full_rights = pkg.includes_full_rights;
+  if (pkg.is_popular !== undefined) updates.is_popular = pkg.is_popular;
+  if (pkg.is_active !== undefined) updates.is_active = pkg.is_active;
+  if (pkg.display_order !== undefined) updates.display_order = Math.max(0, Math.min(pkg.display_order, 1000));
+
+  if (Object.keys(updates).length === 0) {
+    return { success: false, error: 'No fields to update' };
+  }
+
+  const supabase = getServerClient();
+
+  // Check slug uniqueness if updating slug
+  if (updates.slug) {
+    const { data: existing } = await supabase
+      .from('config_packages')
+      .select('id')
+      .eq('slug', updates.slug)
+      .neq('id', id)
+      .single();
+
+    if (existing) {
+      return { success: false, error: 'A package with this slug already exists' };
+    }
+  }
+
+  const { error } = await supabase
+    .from('config_packages')
+    .update(updates)
+    .eq('id', id);
+
+  if (error) {
+    console.error('[ADMIN] Error updating package:', error);
+    return { success: false, error: error.message };
+  }
+
+  return { success: true };
+}
+
+/**
+ * Delete package
+ */
+export async function deletePackage(id: string): Promise<{ success: boolean; error?: string }> {
+  if (!isValidUUID(id)) {
+    return { success: false, error: 'Invalid ID' };
+  }
+
+  const supabase = getServerClient();
+
+  // Check if package is used in orders
+  const { data: pkgData } = await supabase
+    .from('config_packages')
+    .select('slug')
+    .eq('id', id)
+    .single();
+
+  if (pkgData) {
+    const { data: orders } = await supabase
+      .from('orders')
+      .select('id')
+      .eq('package_slug', pkgData.slug)
+      .limit(1);
+
+    if (orders && orders.length > 0) {
+      return { success: false, error: 'Cannot delete package that is used in orders. Deactivate it instead.' };
+    }
+  }
+
+  const { error } = await supabase
+    .from('config_packages')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error('[ADMIN] Error deleting package:', error);
+    return { success: false, error: error.message };
+  }
+
+  return { success: true };
+}
+
+// ============================================
+// FAQ CRUD FUNCTIONS
+// ============================================
+
+/**
+ * Create new FAQ
+ */
+export async function createFAQ(
+  faq: Omit<ConfigFAQ, 'id' | 'created_at'>
+): Promise<{ success: boolean; error?: string; id?: string }> {
+  // Sanitize inputs
+  const sanitized = {
+    question: sanitizeString(faq.question, 500),
+    answer: sanitizeString(faq.answer, 2000),
+    category: faq.category ? sanitizeString(faq.category, 100) : 'general',
+    locale: faq.locale || 'en',
+    display_order: Math.max(0, Math.min(faq.display_order, 1000)),
+    is_active: faq.is_active,
+  };
+
+  const supabase = getServerClient();
+
+  // Insert
+  const { data, error } = await supabase
+    .from('config_faq')
+    .insert(sanitized)
+    .select('id')
+    .single();
+
+  if (error) {
+    console.error('[ADMIN] Error creating FAQ:', error);
+    return { success: false, error: error.message };
+  }
+
+  return { success: true, id: data?.id };
+}
+
+/**
+ * Update FAQ
+ */
+export async function updateFAQ(
+  id: string,
+  faq: Partial<Omit<ConfigFAQ, 'id' | 'created_at'>>
+): Promise<{ success: boolean; error?: string }> {
+  if (!isValidUUID(id)) {
+    return { success: false, error: 'Invalid ID' };
+  }
+
+  // Build sanitized update object
+  const updates: any = {};
+  if (faq.question) updates.question = sanitizeString(faq.question, 500);
+  if (faq.answer) updates.answer = sanitizeString(faq.answer, 2000);
+  if (faq.category !== undefined) updates.category = faq.category ? sanitizeString(faq.category, 100) : 'general';
+  if (faq.locale !== undefined) updates.locale = faq.locale || 'en';
+  if (faq.display_order !== undefined) updates.display_order = Math.max(0, Math.min(faq.display_order, 1000));
+  if (faq.is_active !== undefined) updates.is_active = faq.is_active;
+
+  if (Object.keys(updates).length === 0) {
+    return { success: false, error: 'No fields to update' };
+  }
+
+  const supabase = getServerClient();
+  const { error } = await supabase
+    .from('config_faq')
+    .update(updates)
+    .eq('id', id);
+
+  if (error) {
+    console.error('[ADMIN] Error updating FAQ:', error);
+    return { success: false, error: error.message };
+  }
+
+  return { success: true };
+}
+
+/**
+ * Delete FAQ
+ */
+export async function deleteFAQ(id: string): Promise<{ success: boolean; error?: string }> {
+  if (!isValidUUID(id)) {
+    return { success: false, error: 'Invalid ID' };
+  }
+
+  const supabase = getServerClient();
+  const { error } = await supabase
+    .from('config_faq')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error('[ADMIN] Error deleting FAQ:', error);
+    return { success: false, error: error.message };
+  }
+
+  return { success: true };
+}
+
+// ============================================
+// TESTIMONIALS CRUD FUNCTIONS
+// ============================================
+
+/**
+ * Create new testimonial
+ */
+export async function createTestimonial(
+  testimonial: Omit<ConfigTestimonial, 'id' | 'created_at'> & { video_url?: string | null; video_source_type?: string | null }
+): Promise<{ success: boolean; error?: string; id?: string }> {
+  // Sanitize inputs
+  const sanitized: any = {
+    customer_name: sanitizeString(testimonial.customer_name, 200),
+    customer_location: testimonial.customer_location ? sanitizeString(testimonial.customer_location, 200) : null,
+    quote: sanitizeString(testimonial.quote, 1000),
+    occasion: sanitizeString(testimonial.occasion || '', 100),
+    rating: Math.max(1, Math.min(testimonial.rating || 5, 5)),
+    image_url: testimonial.image_url ? sanitizeString(testimonial.image_url, 500) : null,
+    is_featured: testimonial.is_featured,
+    is_active: testimonial.is_active,
+    display_order: Math.max(0, Math.min(testimonial.display_order, 1000)),
+  };
+
+  // Add video fields if provided
+  if (testimonial.video_url) {
+    sanitized.video_url = sanitizeString(testimonial.video_url, 500);
+  }
+  if (testimonial.video_source_type) {
+    sanitized.video_source_type = testimonial.video_source_type;
+  }
+
+  const supabase = getServerClient();
+
+  // Insert
+  const { data, error } = await supabase
+    .from('config_testimonials')
+    .insert(sanitized)
+    .select('id')
+    .single();
+
+  if (error) {
+    console.error('[ADMIN] Error creating testimonial:', error);
+    return { success: false, error: error.message };
+  }
+
+  return { success: true, id: data?.id };
+}
+
+// ============================================
+// QUESTIONNAIRE FIELDS CRUD FUNCTIONS
+// ============================================
+
+export interface QuestionnaireField {
+  id: string;
+  occasion_slug: string | null;
+  field_name: string;
+  field_type: 'text' | 'textarea' | 'select' | 'radio' | 'checkbox' | 'date' | 'number' | 'email' | 'phone';
+  field_label: string;
+  placeholder: string | null;
+  help_text: string | null;
+  required: boolean;
+  display_order: number;
+  options: { value: string; label: string }[] | null;
+  field_group: 'recipient' | 'relationship' | 'memories' | 'song_preferences' | 'additional';
+  validation_rules: {
+    min_length?: number;
+    max_length?: number;
+    pattern?: string;
+    min?: number;
+    max?: number;
+  } | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Get questionnaire fields for an occasion (including common fields)
+ * @param occasionSlug - Occasion slug or null for common fields only
+ */
+export async function getQuestionnaireFields(occasionSlug?: string): Promise<QuestionnaireField[]> {
+  const supabase = getServerClient();
+
+  let query = supabase
+    .from('config_questionnaire_fields')
+    .select('*')
+    .eq('is_active', true)
+    .order('field_group', { ascending: true })
+    .order('display_order', { ascending: true });
+
+  if (occasionSlug) {
+    // Get both common fields (NULL occasion_slug) and occasion-specific fields
+    query = query.or(`occasion_slug.is.null,occasion_slug.eq.${occasionSlug}`);
+  } else {
+    // Get only common fields
+    query = query.is('occasion_slug', null);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error('[ADMIN] Error fetching questionnaire fields:', error);
+    return [];
+  }
+
+  // Ensure JSONB fields are properly parsed (in case they come as strings)
+  return (data || []).map((field) => ({
+    ...field,
+    options: typeof field.options === 'string' ? JSON.parse(field.options) : field.options,
+    validation_rules: typeof field.validation_rules === 'string' ? JSON.parse(field.validation_rules) : field.validation_rules,
+  })) as QuestionnaireField[];
+}
+
+/**
+ * Get all questionnaire fields (for admin management)
+ */
+export async function getAllQuestionnaireFields(occasionSlug?: string | null): Promise<QuestionnaireField[]> {
+  const supabase = getServerClient();
+
+  let query = supabase
+    .from('config_questionnaire_fields')
+    .select('*')
+    .order('occasion_slug', { ascending: true, nullsFirst: true })
+    .order('field_group', { ascending: true })
+    .order('display_order', { ascending: true });
+
+  if (occasionSlug !== undefined) {
+    if (occasionSlug === null || occasionSlug === 'common') {
+      query = query.is('occasion_slug', null);
+    } else {
+      query = query.eq('occasion_slug', occasionSlug);
+    }
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error('[ADMIN] Error fetching all questionnaire fields:', error);
+    return [];
+  }
+
+  // Ensure JSONB fields are properly parsed (in case they come as strings)
+  return (data || []).map((field) => ({
+    ...field,
+    options: typeof field.options === 'string' ? JSON.parse(field.options) : field.options,
+    validation_rules: typeof field.validation_rules === 'string' ? JSON.parse(field.validation_rules) : field.validation_rules,
+  })) as QuestionnaireField[];
+}
+
+/**
+ * Get single questionnaire field by ID
+ */
+export async function getQuestionnaireFieldById(id: string): Promise<QuestionnaireField | null> {
+  if (!isValidUUID(id)) {
+    return null;
+  }
+
+  const supabase = getServerClient();
+  const { data, error } = await supabase
+    .from('config_questionnaire_fields')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error || !data) {
+    return null;
+  }
+
+  // Ensure JSONB fields are properly parsed
+  return {
+    ...data,
+    options: typeof data.options === 'string' ? JSON.parse(data.options) : data.options,
+    validation_rules: typeof data.validation_rules === 'string' ? JSON.parse(data.validation_rules) : data.validation_rules,
+  } as QuestionnaireField;
+}
+
+/**
+ * Create new questionnaire field
+ */
+export async function createQuestionnaireField(
+  field: Omit<QuestionnaireField, 'id' | 'created_at' | 'updated_at'>
+): Promise<{ success: boolean; error?: string; id?: string }> {
+  // Validate field type
+  const validFieldTypes = ['text', 'textarea', 'select', 'radio', 'checkbox', 'date', 'number', 'email', 'phone'];
+  if (!validFieldTypes.includes(field.field_type)) {
+    return { success: false, error: 'Invalid field type' };
+  }
+
+  // Validate field group
+  const validGroups = ['recipient', 'relationship', 'memories', 'song_preferences', 'additional'];
+  if (!validGroups.includes(field.field_group)) {
+    return { success: false, error: 'Invalid field group' };
+  }
+
+  // Validate options for select/radio/checkbox
+  if (['select', 'radio', 'checkbox'].includes(field.field_type)) {
+    if (!field.options || !Array.isArray(field.options) || field.options.length === 0) {
+      return { success: false, error: 'Options are required for select/radio/checkbox fields' };
+    }
+  }
+
+  // Sanitize inputs
+  const sanitized: any = {
+    occasion_slug: field.occasion_slug ? sanitizeString(field.occasion_slug, 100) : null,
+    field_name: sanitizeString(field.field_name, 100),
+    field_type: field.field_type,
+    field_label: sanitizeString(field.field_label, 200),
+    placeholder: field.placeholder ? sanitizeString(field.placeholder, 200) : null,
+    help_text: field.help_text ? sanitizeString(field.help_text, 500) : null,
+    required: field.required,
+    display_order: Math.max(0, Math.min(field.display_order, 1000)),
+    options: field.options || null,
+    field_group: field.field_group,
+    validation_rules: field.validation_rules || null,
+    is_active: field.is_active,
+  };
+
+  const supabase = getServerClient();
+
+  // Check if field_name already exists for this occasion
+  const { data: existing } = await supabase
+    .from('config_questionnaire_fields')
+    .select('id')
+    .eq('field_name', sanitized.field_name)
+    .eq('occasion_slug', sanitized.occasion_slug || null)
+    .single();
+
+  if (existing) {
+    return { success: false, error: 'A field with this name already exists for this occasion' };
+  }
+
+  // Insert
+  const { data, error } = await supabase
+    .from('config_questionnaire_fields')
+    .insert(sanitized)
+    .select('id')
+    .single();
+
+  if (error) {
+    console.error('[ADMIN] Error creating questionnaire field:', error);
+    return { success: false, error: error.message };
+  }
+
+  return { success: true, id: data?.id };
+}
+
+/**
+ * Update questionnaire field
+ */
+export async function updateQuestionnaireField(
+  id: string,
+  field: Partial<Omit<QuestionnaireField, 'id' | 'created_at' | 'updated_at'>>
+): Promise<{ success: boolean; error?: string }> {
+  if (!isValidUUID(id)) {
+    return { success: false, error: 'Invalid ID' };
+  }
+
+  // Validate field type if provided
+  if (field.field_type) {
+    const validFieldTypes = ['text', 'textarea', 'select', 'radio', 'checkbox', 'date', 'number', 'email', 'phone'];
+    if (!validFieldTypes.includes(field.field_type)) {
+      return { success: false, error: 'Invalid field type' };
+    }
+  }
+
+  // Validate field group if provided
+  if (field.field_group) {
+    const validGroups = ['recipient', 'relationship', 'memories', 'song_preferences', 'additional'];
+    if (!validGroups.includes(field.field_group)) {
+      return { success: false, error: 'Invalid field group' };
+    }
+  }
+
+  // Build sanitized update object
+  const updates: any = {};
+  if (field.occasion_slug !== undefined) {
+    updates.occasion_slug = field.occasion_slug ? sanitizeString(field.occasion_slug, 100) : null;
+  }
+  if (field.field_name) updates.field_name = sanitizeString(field.field_name, 100);
+  if (field.field_type) updates.field_type = field.field_type;
+  if (field.field_label) updates.field_label = sanitizeString(field.field_label, 200);
+  if (field.placeholder !== undefined) {
+    updates.placeholder = field.placeholder ? sanitizeString(field.placeholder, 200) : null;
+  }
+  if (field.help_text !== undefined) {
+    updates.help_text = field.help_text ? sanitizeString(field.help_text, 500) : null;
+  }
+  if (field.required !== undefined) updates.required = field.required;
+  if (field.display_order !== undefined) updates.display_order = Math.max(0, Math.min(field.display_order, 1000));
+  if (field.options !== undefined) updates.options = field.options || null;
+  if (field.field_group) updates.field_group = field.field_group;
+  if (field.validation_rules !== undefined) updates.validation_rules = field.validation_rules || null;
+  if (field.is_active !== undefined) updates.is_active = field.is_active;
+
+  if (Object.keys(updates).length === 0) {
+    return { success: false, error: 'No fields to update' };
+  }
+
+  const supabase = getServerClient();
+
+  // Check field_name uniqueness if updating field_name
+  if (updates.field_name) {
+    const currentField = await getQuestionnaireFieldById(id);
+    if (currentField) {
+      const { data: existing } = await supabase
+        .from('config_questionnaire_fields')
+        .select('id')
+        .eq('field_name', updates.field_name)
+        .eq('occasion_slug', currentField.occasion_slug || null)
+        .neq('id', id)
+        .single();
+
+      if (existing) {
+        return { success: false, error: 'A field with this name already exists for this occasion' };
+      }
+    }
+  }
+
+  const { error } = await supabase
+    .from('config_questionnaire_fields')
+    .update(updates)
+    .eq('id', id);
+
+  if (error) {
+    console.error('[ADMIN] Error updating questionnaire field:', error);
+    return { success: false, error: error.message };
+  }
+
+  return { success: true };
+}
+
+/**
+ * Delete questionnaire field
+ */
+export async function deleteQuestionnaireField(id: string): Promise<{ success: boolean; error?: string }> {
+  if (!isValidUUID(id)) {
+    return { success: false, error: 'Invalid ID' };
+  }
+
+  const supabase = getServerClient();
+  const { error } = await supabase
+    .from('config_questionnaire_fields')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error('[ADMIN] Error deleting questionnaire field:', error);
+    return { success: false, error: error.message };
+  }
+
+  return { success: true };
+}
+
+/**
+ * Reorder questionnaire fields
+ */
+export async function reorderQuestionnaireFields(
+  fields: { id: string; display_order: number }[]
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = getServerClient();
+
+  // Validate all IDs
+  for (const field of fields) {
+    if (!isValidUUID(field.id)) {
+      return { success: false, error: 'Invalid field ID' };
+    }
+  }
+
+  // Update each field's display_order
+  const updates = fields.map((field) =>
+    supabase
+      .from('config_questionnaire_fields')
+      .update({ display_order: Math.max(0, Math.min(field.display_order, 1000)) })
+      .eq('id', field.id)
+  );
+
+  try {
+    await Promise.all(updates);
+    return { success: true };
+  } catch (error) {
+    console.error('[ADMIN] Error reordering questionnaire fields:', error);
+    return { success: false, error: 'Failed to reorder fields' };
+  }
+}
+
+/**
+ * Update testimonial
+ */
+export async function updateTestimonial(
+  id: string,
+  testimonial: Partial<Omit<ConfigTestimonial, 'id' | 'created_at'> & { video_url?: string | null; video_source_type?: string | null }>
+): Promise<{ success: boolean; error?: string }> {
+  if (!isValidUUID(id)) {
+    return { success: false, error: 'Invalid ID' };
+  }
+
+  // Build sanitized update object
+  const updates: any = {};
+  if (testimonial.customer_name) updates.customer_name = sanitizeString(testimonial.customer_name, 200);
+  if (testimonial.customer_location !== undefined) {
+    updates.customer_location = testimonial.customer_location ? sanitizeString(testimonial.customer_location, 200) : null;
+  }
+  if (testimonial.quote) updates.quote = sanitizeString(testimonial.quote, 1000);
+  if (testimonial.occasion !== undefined) updates.occasion = sanitizeString(testimonial.occasion || '', 100);
+  if (testimonial.rating !== undefined) updates.rating = Math.max(1, Math.min(testimonial.rating, 5));
+  if (testimonial.image_url !== undefined) {
+    updates.image_url = testimonial.image_url ? sanitizeString(testimonial.image_url, 500) : null;
+  }
+  if (testimonial.is_featured !== undefined) updates.is_featured = testimonial.is_featured;
+  if (testimonial.is_active !== undefined) updates.is_active = testimonial.is_active;
+  if (testimonial.display_order !== undefined) updates.display_order = Math.max(0, Math.min(testimonial.display_order, 1000));
+
+  // Add video fields if provided
+  if ('video_url' in testimonial) {
+    updates.video_url = testimonial.video_url ? sanitizeString(testimonial.video_url, 500) : null;
+  }
+  if ('video_source_type' in testimonial) {
+    updates.video_source_type = testimonial.video_source_type;
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return { success: false, error: 'No fields to update' };
+  }
+
+  const supabase = getServerClient();
+  const { error } = await supabase
+    .from('config_testimonials')
+    .update(updates)
+    .eq('id', id);
+
+  if (error) {
+    console.error('[ADMIN] Error updating testimonial:', error);
+    return { success: false, error: error.message };
+  }
+
+  return { success: true };
+}
+
+/**
+ * Delete testimonial
+ */
+export async function deleteTestimonial(id: string): Promise<{ success: boolean; error?: string }> {
+  if (!isValidUUID(id)) {
+    return { success: false, error: 'Invalid ID' };
+  }
+
+  const supabase = getServerClient();
+  const { error } = await supabase
+    .from('config_testimonials')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error('[ADMIN] Error deleting testimonial:', error);
     return { success: false, error: error.message };
   }
 

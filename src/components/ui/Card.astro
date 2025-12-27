@@ -4,11 +4,12 @@
  * Content container with optional hover effects and variants
  */
 
-interface Props {
+import type { HTMLAttributes } from 'astro/types';
+
+interface Props extends HTMLAttributes<'div'> {
   variant?: 'default' | 'elevated' | 'bordered' | 'interactive';
   padding?: 'none' | 'sm' | 'md' | 'lg';
   href?: string;
-  class?: string;
 }
 
 const {
@@ -16,6 +17,7 @@ const {
   padding = 'md',
   href,
   class: className = '',
+  ...rest
 } = Astro.props;
 
 const baseStyles = 'rounded-xl bg-primary-cardBlack';
@@ -41,16 +43,14 @@ const classes = [
   href ? 'block' : '',
   className,
 ].filter(Boolean).join(' ');
-
-const Tag = href ? 'a' : 'div';
 ---
 
 {href ? (
-  <a href={href} class={classes}>
+  <a href={href} class={classes} {...rest}>
     <slot />
   </a>
 ) : (
-  <div class={classes}>
+  <div class={classes} {...rest}>
     <slot />
   </div>
 )}

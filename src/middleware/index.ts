@@ -1,14 +1,15 @@
 /**
  * Astro Middleware
- * Handles authentication, security headers, and rate limiting
+ * Handles authentication, security headers, rate limiting, and CSRF tokens
  */
 
 import { defineMiddleware, sequence } from 'astro:middleware';
 import { createServerClientWithToken } from '@/lib/supabase/server';
+import { setCSRFToken, generateCSRFToken } from '@/lib/auth/session';
 
 // Routes that require authentication
 const protectedRoutes = [
-  '/portal',
+  '/dashboard',
   '/admin',
 ];
 
@@ -35,6 +36,8 @@ const authMiddleware = defineMiddleware(async ({ request, cookies, redirect, loc
   const accessToken = cookies.get('sb-access-token')?.value;
   const refreshToken = cookies.get('sb-refresh-token')?.value;
 
+  console.log(`[Middleware] ${pathname} - accessToken: ${accessToken ? 'present' : 'missing'}, refreshToken: ${refreshToken ? 'present' : 'missing'}`);
+
   let user = null;
   let session = null;
 
@@ -44,27 +47,59 @@ const authMiddleware = defineMiddleware(async ({ request, cookies, redirect, loc
       const supabase = createServerClientWithToken(accessToken);
       const { data: { user: authUser }, error } = await supabase.auth.getUser();
 
+      console.log(`[Middleware] getUser result - user: ${authUser?.id || 'null'}, error: ${error?.message || 'none'}`);
+
       if (!error && authUser) {
         user = authUser;
 
         // Fetch user profile for role info
         const { data: profile } = await supabase
           .from('profiles')
-          .select('admin_role, first_name, last_name')
+          .select('*')
           .eq('id', authUser.id)
           .single();
 
         if (profile) {
           user = { ...authUser, profile };
         }
+
+        // Set session data for pages/layouts
+        session = {
+          user: {
+            id: authUser.id,
+            email: authUser.email || '',
+            created_at: authUser.created_at,
+          },
+          profile: profile,
+          accessToken: accessToken,
+        };
       }
     } catch (error) {
       console.error('Auth middleware error:', error);
     }
   }
 
-  // Store user in locals for use in pages
+  // Store user and session in locals for use in pages
   locals.user = user;
+  locals.session = session;
+
+  // Generate CSRF token for authenticated users
+  if (user) {
+    // Check if token already exists and is valid
+    const existingToken = cookies.get('csrf-token')?.value;
+    if (!existingToken || existingToken.length !== 64) {
+      // Generate new token if missing or invalid
+      const token = setCSRFToken(cookies);
+      locals.csrfToken = token;
+      console.log(`[Middleware] Generated new CSRF token for user ${(user as any).id}: ${token.substring(0, 8)}... (length: ${token.length})`);
+    } else {
+      locals.csrfToken = existingToken;
+      console.log(`[Middleware] Using existing CSRF token: ${existingToken.substring(0, 8)}... (length: ${existingToken.length})`);
+    }
+  } else {
+    // Clear any stale CSRF token for unauthenticated requests
+    locals.csrfToken = '';
+  }
 
   // Check protected routes
   const isProtectedRoute = protectedRoutes.some((route) => pathname.startsWith(route));
@@ -78,14 +113,14 @@ const authMiddleware = defineMiddleware(async ({ request, cookies, redirect, loc
   if (isAdminRoute) {
     const adminRole = (user as any)?.profile?.admin_role;
     if (!adminRole) {
-      return redirect('/portal');
+      return redirect('/dashboard');
     }
   }
 
   // Redirect authenticated users away from auth pages
   const isAuthRoute = authRoutes.some((route) => pathname === route);
   if (isAuthRoute && user) {
-    return redirect('/portal');
+    return redirect('/dashboard');
   }
 
   return next();

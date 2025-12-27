@@ -231,7 +231,7 @@ import Button from '@/components/ui/Button.astro';
   // Check if already logged in
   supabase.auth.getSession().then(({ data: { session } }) => {
     if (session) {
-      window.location.href = '/portal';
+      window.location.href = '/dashboard';
     }
   });
 
@@ -308,7 +308,7 @@ import Button from '@/components/ui/Button.astro';
         showSuccess(email);
       } else if (data.session) {
         // Auto-confirmed (shouldn't happen with email confirmation enabled)
-        window.location.href = '/portal';
+        window.location.href = '/dashboard';
       }
 
     } catch (err) {

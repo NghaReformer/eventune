@@ -13,15 +13,10 @@ import { isValidUUID, validateOrderOwnership } from '../../../lib/security/valid
 
 const { id } = Astro.params;
 
-// Get session from layout (already validated)
-const session = Astro.locals.session as SessionData | undefined;
+// Session is set by middleware - if we reach here, user is authenticated
+const session = Astro.locals.session as SessionData;
 const csrfToken = Astro.locals.csrfToken as string;
-
-if (!session) {
-  return Astro.redirect('/auth/login?redirect=/dashboard/orders');
-}
-
-const { user } = session;
+const user = session?.user;
 
 // Validate UUID format to prevent injection
 if (!id || !isValidUUID(id)) {
@@ -362,160 +357,277 @@ const isPaid = order.payment_status === 'paid';
 </DashboardLayout>
 
 <style>
-  @reference "../../../styles/global.css";
+  :root {
+    --studio-black: #0A0A0A;
+    --studio-card: #141414;
+    --studio-cream: #F5F5F5;
+    --gold: #D4AF37;
+    --gold-dark: #B8962E;
+  }
 
   .font-display { font-family: 'Playfair Display', serif; }
 
   .order-card {
-    @apply bg-studio-card border border-gold/10 rounded-xl p-6;
+    background: var(--studio-card);
+    border: 1px solid rgba(212, 175, 55, 0.1);
+    border-radius: 0.75rem;
+    padding: 1.5rem;
   }
 
   .sidebar-card {
-    @apply bg-studio-card border border-gold/10 rounded-xl p-5;
+    background: var(--studio-card);
+    border: 1px solid rgba(212, 175, 55, 0.1);
+    border-radius: 0.75rem;
+    padding: 1.25rem;
   }
 
   .status-badge {
-    @apply inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium uppercase tracking-wider;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.375rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
   }
 
   .status-dot {
-    @apply w-2 h-2 rounded-full;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 9999px;
   }
 
-  .status-amber { @apply bg-amber-500/10 text-amber-400; }
-  .status-amber .status-dot { @apply bg-amber-400; }
+  .status-amber { background: rgba(245, 158, 11, 0.1); color: #fbbf24; }
+  .status-amber .status-dot { background: #fbbf24; }
 
-  .status-emerald { @apply bg-emerald-500/10 text-emerald-400; }
-  .status-emerald .status-dot { @apply bg-emerald-400; }
+  .status-emerald { background: rgba(16, 185, 129, 0.1); color: #34d399; }
+  .status-emerald .status-dot { background: #34d399; }
 
-  .status-blue { @apply bg-blue-500/10 text-blue-400; }
-  .status-blue .status-dot { @apply bg-blue-400; }
+  .status-blue { background: rgba(59, 130, 246, 0.1); color: #60a5fa; }
+  .status-blue .status-dot { background: #60a5fa; }
 
-  .status-purple { @apply bg-purple-500/10 text-purple-400; }
-  .status-purple .status-dot { @apply bg-purple-400; }
+  .status-purple { background: rgba(139, 92, 246, 0.1); color: #c084fc; }
+  .status-purple .status-dot { background: #c084fc; }
 
-  .status-indigo { @apply bg-indigo-500/10 text-indigo-400; }
-  .status-indigo .status-dot { @apply bg-indigo-400; }
+  .status-indigo { background: rgba(99, 102, 241, 0.1); color: #818cf8; }
+  .status-indigo .status-dot { background: #818cf8; }
 
-  .status-cyan { @apply bg-cyan-500/10 text-cyan-400; }
-  .status-cyan .status-dot { @apply bg-cyan-400; }
+  .status-cyan { background: rgba(6, 182, 212, 0.1); color: #22d3ee; }
+  .status-cyan .status-dot { background: #22d3ee; }
 
-  .status-orange { @apply bg-orange-500/10 text-orange-400; }
-  .status-orange .status-dot { @apply bg-orange-400; }
+  .status-orange { background: rgba(249, 115, 22, 0.1); color: #fb923c; }
+  .status-orange .status-dot { background: #fb923c; }
 
-  .status-gold { @apply bg-gold/10 text-gold; }
-  .status-gold .status-dot { @apply bg-gold; }
+  .status-gold { background: rgba(212, 175, 55, 0.1); color: var(--gold); }
+  .status-gold .status-dot { background: var(--gold); }
 
-  .status-red { @apply bg-red-500/10 text-red-400; }
-  .status-red .status-dot { @apply bg-red-400; }
+  .status-red { background: rgba(239, 68, 68, 0.1); color: #f87171; }
+  .status-red .status-dot { background: #f87171; }
 
-  .status-gray { @apply bg-gray-500/10 text-gray-400; }
-  .status-gray .status-dot { @apply bg-gray-400; }
+  .status-gray { background: rgba(107, 114, 128, 0.1); color: #9ca3af; }
+  .status-gray .status-dot { background: #9ca3af; }
 
   .detail-item {
-    @apply flex flex-col gap-1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
   }
 
   .detail-label {
-    @apply text-sm text-studio-cream/50;
+    font-size: 0.875rem;
+    color: rgba(245, 245, 245, 0.5);
   }
 
   .detail-value {
-    @apply text-lg text-studio-cream font-medium;
+    font-size: 1.125rem;
+    color: var(--studio-cream);
+    font-weight: 500;
   }
 
   .download-btn {
-    @apply inline-flex items-center gap-3 px-6 py-3;
-    @apply bg-gradient-to-r from-gold to-gold-dark text-studio-black font-semibold rounded-lg;
-    @apply hover:shadow-lg hover:shadow-gold/30 transition-all duration-300;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1.5rem;
+    background: linear-gradient(to right, var(--gold), var(--gold-dark));
+    color: var(--studio-black);
+    font-weight: 600;
+    border-radius: 0.5rem;
+    text-decoration: none;
+    transition: all 0.3s;
+  }
+
+  .download-btn:hover {
+    box-shadow: 0 10px 25px rgba(212, 175, 55, 0.3);
   }
 
   .download-icon {
-    @apply w-10 h-10 rounded-full bg-studio-black/20 flex items-center justify-center;
-    @apply group-hover:scale-110 transition-transform;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 9999px;
+    background: rgba(10, 10, 10, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s;
+  }
+
+  .download-btn:hover .download-icon {
+    transform: scale(1.1);
   }
 
   .revision-btn {
-    @apply inline-flex items-center gap-2 px-6 py-3;
-    @apply border border-orange-500/30 text-orange-400 font-medium rounded-lg;
-    @apply hover:bg-orange-500/10 hover:border-orange-500/50 transition-all;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    border: 1px solid rgba(249, 115, 22, 0.3);
+    color: #fb923c;
+    font-weight: 500;
+    border-radius: 0.5rem;
+    background: none;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .revision-btn:hover {
+    background: rgba(249, 115, 22, 0.1);
+    border-color: rgba(249, 115, 22, 0.5);
   }
 
   .form-textarea {
-    @apply w-full bg-studio-black border border-gold/20 rounded-lg px-4 py-3;
-    @apply text-studio-cream placeholder-studio-cream/30;
-    @apply focus:outline-none focus:border-gold/50 transition-colors;
-    @apply resize-none;
+    width: 100%;
+    background: var(--studio-black);
+    border: 1px solid rgba(212, 175, 55, 0.2);
+    border-radius: 0.5rem;
+    padding: 0.75rem 1rem;
+    color: var(--studio-cream);
+    font-size: 0.875rem;
+    resize: none;
+    transition: border-color 0.2s;
+  }
+
+  .form-textarea::placeholder {
+    color: rgba(245, 245, 245, 0.3);
+  }
+
+  .form-textarea:focus {
+    outline: none;
+    border-color: rgba(212, 175, 55, 0.5);
   }
 
   .action-link {
-    @apply flex items-center gap-3 px-4 py-3 rounded-lg;
-    @apply text-studio-cream/70 hover:text-gold hover:bg-gold/5;
-    @apply transition-all duration-200;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-radius: 0.5rem;
+    color: rgba(245, 245, 245, 0.7);
+    text-decoration: none;
+    transition: all 0.2s;
+  }
+
+  .action-link:hover {
+    color: var(--gold);
+    background: rgba(212, 175, 55, 0.05);
   }
 
   /* Timeline */
   .timeline {
-    @apply relative;
+    position: relative;
   }
 
   .timeline-item {
-    @apply relative pl-8 pb-8 last:pb-0;
+    position: relative;
+    padding-left: 2rem;
+    padding-bottom: 2rem;
+  }
+
+  .timeline-item:last-child {
+    padding-bottom: 0;
   }
 
   .timeline-dot {
-    @apply absolute left-0 top-0 w-4 h-4 rounded-full border-2 bg-studio-card;
-    @apply flex items-center justify-center;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 1rem;
+    height: 1rem;
+    border-radius: 9999px;
+    border: 2px solid;
+    background: var(--studio-card);
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .timeline-dot.active {
-    @apply ring-4;
+    box-shadow: 0 0 0 4px rgba(212, 175, 55, 0.2);
   }
 
-  .dot-amber { @apply border-amber-400; }
-  .dot-amber.active { @apply bg-amber-400 ring-amber-400/20; }
+  .dot-amber { border-color: #fbbf24; }
+  .dot-amber.active { background: #fbbf24; box-shadow: 0 0 0 4px rgba(251, 191, 36, 0.2); }
 
-  .dot-emerald { @apply border-emerald-400; }
-  .dot-emerald.active { @apply bg-emerald-400 ring-emerald-400/20; }
+  .dot-emerald { border-color: #34d399; }
+  .dot-emerald.active { background: #34d399; box-shadow: 0 0 0 4px rgba(52, 211, 153, 0.2); }
 
-  .dot-blue { @apply border-blue-400; }
-  .dot-blue.active { @apply bg-blue-400 ring-blue-400/20; }
+  .dot-blue { border-color: #60a5fa; }
+  .dot-blue.active { background: #60a5fa; box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.2); }
 
-  .dot-purple { @apply border-purple-400; }
-  .dot-purple.active { @apply bg-purple-400 ring-purple-400/20; }
+  .dot-purple { border-color: #c084fc; }
+  .dot-purple.active { background: #c084fc; box-shadow: 0 0 0 4px rgba(192, 132, 252, 0.2); }
 
-  .dot-indigo { @apply border-indigo-400; }
-  .dot-indigo.active { @apply bg-indigo-400 ring-indigo-400/20; }
+  .dot-indigo { border-color: #818cf8; }
+  .dot-indigo.active { background: #818cf8; box-shadow: 0 0 0 4px rgba(129, 140, 248, 0.2); }
 
-  .dot-cyan { @apply border-cyan-400; }
-  .dot-cyan.active { @apply bg-cyan-400 ring-cyan-400/20; }
+  .dot-cyan { border-color: #22d3ee; }
+  .dot-cyan.active { background: #22d3ee; box-shadow: 0 0 0 4px rgba(34, 211, 238, 0.2); }
 
-  .dot-orange { @apply border-orange-400; }
-  .dot-orange.active { @apply bg-orange-400 ring-orange-400/20; }
+  .dot-orange { border-color: #fb923c; }
+  .dot-orange.active { background: #fb923c; box-shadow: 0 0 0 4px rgba(251, 146, 60, 0.2); }
 
-  .dot-gold { @apply border-gold; }
-  .dot-gold.active { @apply bg-gold ring-gold/20; }
+  .dot-gold { border-color: var(--gold); }
+  .dot-gold.active { background: var(--gold); box-shadow: 0 0 0 4px rgba(212, 175, 55, 0.2); }
 
-  .dot-red { @apply border-red-400; }
-  .dot-red.active { @apply bg-red-400 ring-red-400/20; }
+  .dot-red { border-color: #f87171; }
+  .dot-red.active { background: #f87171; box-shadow: 0 0 0 4px rgba(248, 113, 113, 0.2); }
 
-  .dot-gray { @apply border-gray-400; }
-  .dot-gray.active { @apply bg-gray-400 ring-gray-400/20; }
+  .dot-gray { border-color: #9ca3af; }
+  .dot-gray.active { background: #9ca3af; box-shadow: 0 0 0 4px rgba(156, 163, 175, 0.2); }
 
   .timeline-line {
-    @apply absolute left-[7px] top-4 bottom-0 w-0.5 bg-gold/20;
+    position: absolute;
+    left: 7px;
+    top: 1rem;
+    bottom: 0;
+    width: 2px;
+    background: rgba(212, 175, 55, 0.2);
   }
 
   .timeline-content {
-    @apply ml-2;
+    margin-left: 0.5rem;
   }
 
   .pulse-ring {
-    @apply absolute inset-0 rounded-full animate-ping opacity-75;
+    position: absolute;
+    inset: 0;
+    border-radius: 9999px;
+    animation: ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;
+    opacity: 0.75;
     background: inherit;
   }
 
+  @keyframes ping {
+    75%, 100% {
+      transform: scale(2);
+      opacity: 0;
+    }
+  }
+
   /* Color text utilities */
+  .text-gold { color: var(--gold); }
   .text-amber-400 { color: #fbbf24; }
   .text-emerald-400 { color: #34d399; }
   .text-blue-400 { color: #60a5fa; }
@@ -525,6 +637,12 @@ const isPaid = order.payment_status === 'paid';
   .text-orange-400 { color: #fb923c; }
   .text-red-400 { color: #f87171; }
   .text-gray-400 { color: #9ca3af; }
+
+  /* Utility classes */
+  .text-studio-cream { color: var(--studio-cream); }
+  .bg-gold\/5 { background: rgba(212, 175, 55, 0.05); }
+  .border-gold\/20 { border-color: rgba(212, 175, 55, 0.2); }
+  .border-orange-500\/20 { border-color: rgba(249, 115, 22, 0.2); }
 </style>
 
 <script>

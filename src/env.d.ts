@@ -43,3 +43,20 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+// Extend Astro's Locals interface
+declare namespace App {
+  interface Locals {
+    session?: {
+      user: import('@supabase/supabase-js').User;
+      profile: import('./types/database.types').Database['public']['Tables']['customers']['Row'] | null;
+    };
+    adminSession?: {
+      user: import('@supabase/supabase-js').User;
+      profile: import('./types/database.types').Database['public']['Tables']['customers']['Row'] | null;
+      adminRole: 'super_admin' | 'order_manager' | 'support' | null;
+      permissions: string[];
+    };
+    csrfToken?: string;
+  }
+}

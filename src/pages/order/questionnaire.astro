@@ -2,6 +2,7 @@
 /**
  * Questionnaire Page
  * Collect story details for custom song creation
+ * Uses dynamic fields from database with fallback to hardcoded fields
  */
 
 import PublicLayout from '@/layouts/PublicLayout.astro';
@@ -10,11 +11,227 @@ import Input from '@/components/ui/Input.astro';
 import Textarea from '@/components/ui/Textarea.astro';
 import Button from '@/components/ui/Button.astro';
 import Badge from '@/components/ui/Badge.astro';
+import { getQuestionnaireFields, type QuestionnaireField } from '@/services/admin.service';
+import { getOccasionBySlug } from '@/services/config.service';
 
 // Get query parameters
 const url = new URL(Astro.request.url);
 const packageSlug = url.searchParams.get('package') || 'classic';
 const occasionSlug = url.searchParams.get('occasion') || 'wedding';
+
+// Fetch occasion info and dynamic questionnaire fields
+let occasionName = occasionSlug.charAt(0).toUpperCase() + occasionSlug.slice(1);
+let fields: QuestionnaireField[] = [];
+
+try {
+  const [occasion, dynamicFields] = await Promise.all([
+    getOccasionBySlug(occasionSlug),
+    getQuestionnaireFields(occasionSlug),
+  ]);
+
+  if (occasion) {
+    occasionName = occasion.name;
+  }
+
+  fields = dynamicFields;
+} catch (error) {
+  console.error('[Questionnaire] Error fetching fields:', error);
+}
+
+// Fallback to hardcoded fields if database fields are empty
+const useFallback = fields.length === 0;
+
+// Hardcoded fallback fields (used when database not ready)
+const fallbackFields: QuestionnaireField[] = [
+  // Recipient group
+  {
+    id: 'fallback-1',
+    occasion_slug: null,
+    field_name: 'recipient_name',
+    field_type: 'text',
+    field_label: 'Who is this song for?',
+    placeholder: 'e.g., Sarah, Mom, John & Mary',
+    help_text: 'The person or people this song celebrates',
+    required: true,
+    display_order: 1,
+    options: null,
+    field_group: 'recipient',
+    validation_rules: null,
+    is_active: true,
+    created_at: '',
+    updated_at: '',
+  },
+  {
+    id: 'fallback-2',
+    occasion_slug: null,
+    field_name: 'recipient_relationship',
+    field_type: 'select',
+    field_label: 'Your relationship to them',
+    placeholder: 'Select relationship',
+    help_text: null,
+    required: true,
+    display_order: 2,
+    options: [
+      { value: 'spouse', label: 'Spouse / Partner' },
+      { value: 'parent', label: 'Parent' },
+      { value: 'child', label: 'Child' },
+      { value: 'sibling', label: 'Sibling' },
+      { value: 'friend', label: 'Friend' },
+      { value: 'grandparent', label: 'Grandparent' },
+      { value: 'other_family', label: 'Other Family Member' },
+      { value: 'colleague', label: 'Colleague' },
+      { value: 'other', label: 'Other' },
+    ],
+    field_group: 'recipient',
+    validation_rules: null,
+    is_active: true,
+    created_at: '',
+    updated_at: '',
+  },
+  {
+    id: 'fallback-3',
+    occasion_slug: null,
+    field_name: 'occasion_date',
+    field_type: 'date',
+    field_label: 'When is the occasion?',
+    placeholder: null,
+    help_text: 'This helps us prioritize delivery',
+    required: false,
+    display_order: 3,
+    options: null,
+    field_group: 'recipient',
+    validation_rules: null,
+    is_active: true,
+    created_at: '',
+    updated_at: '',
+  },
+  // Memories group
+  {
+    id: 'fallback-4',
+    occasion_slug: null,
+    field_name: 'story',
+    field_type: 'textarea',
+    field_label: 'Tell us about your story',
+    placeholder: 'Share the memories, moments, and feelings you want captured in the song. Include specific details, inside jokes, meaningful places, or special phrases that matter to you both...',
+    help_text: 'This is the heart of your song. The more detail, the better!',
+    required: true,
+    display_order: 1,
+    options: null,
+    field_group: 'memories',
+    validation_rules: { max_length: 3000 },
+    is_active: true,
+    created_at: '',
+    updated_at: '',
+  },
+  // Song preferences group
+  {
+    id: 'fallback-5',
+    occasion_slug: null,
+    field_name: 'genre',
+    field_type: 'select',
+    field_label: 'Preferred genre/style',
+    placeholder: 'Let our artists decide',
+    help_text: null,
+    required: false,
+    display_order: 1,
+    options: [
+      { value: 'pop', label: 'Pop' },
+      { value: 'rnb', label: 'R&B / Soul' },
+      { value: 'acoustic', label: 'Acoustic' },
+      { value: 'country', label: 'Country' },
+      { value: 'gospel', label: 'Gospel' },
+      { value: 'jazz', label: 'Jazz' },
+      { value: 'afrobeats', label: 'Afrobeats' },
+      { value: 'classical', label: 'Classical' },
+    ],
+    field_group: 'song_preferences',
+    validation_rules: null,
+    is_active: true,
+    created_at: '',
+    updated_at: '',
+  },
+  {
+    id: 'fallback-6',
+    occasion_slug: null,
+    field_name: 'moods',
+    field_type: 'checkbox',
+    field_label: 'Mood/Feeling',
+    placeholder: null,
+    help_text: 'Select all that apply',
+    required: false,
+    display_order: 2,
+    options: [
+      { value: 'romantic', label: 'Romantic' },
+      { value: 'upbeat', label: 'Upbeat' },
+      { value: 'emotional', label: 'Emotional' },
+      { value: 'celebratory', label: 'Celebratory' },
+      { value: 'nostalgic', label: 'Nostalgic' },
+      { value: 'inspirational', label: 'Inspirational' },
+    ],
+    field_group: 'song_preferences',
+    validation_rules: null,
+    is_active: true,
+    created_at: '',
+    updated_at: '',
+  },
+  {
+    id: 'fallback-7',
+    occasion_slug: null,
+    field_name: 'special_requests',
+    field_type: 'textarea',
+    field_label: 'Any specific requests?',
+    placeholder: 'Reference songs you like, specific lyrics to include, or anything else we should know...',
+    help_text: null,
+    required: false,
+    display_order: 3,
+    options: null,
+    field_group: 'song_preferences',
+    validation_rules: { max_length: 1000 },
+    is_active: true,
+    created_at: '',
+    updated_at: '',
+  },
+];
+
+// Use dynamic fields or fallback
+const activeFields = useFallback ? fallbackFields : fields;
+
+// Group fields by field_group
+const groupedFields: Record<string, QuestionnaireField[]> = {};
+const groupOrder = ['recipient', 'relationship', 'memories', 'song_preferences', 'additional'];
+const groupLabels: Record<string, string> = {
+  recipient: 'About the Recipient',
+  relationship: 'Your Relationship',
+  memories: 'Your Story',
+  song_preferences: 'Music Preferences',
+  additional: 'Additional Information',
+};
+
+// Initialize groups
+groupOrder.forEach(group => {
+  groupedFields[group] = [];
+});
+
+// Populate groups
+activeFields.forEach(field => {
+  const group = field.field_group || 'additional';
+  if (!groupedFields[group]) {
+    groupedFields[group] = [];
+  }
+  groupedFields[group].push(field);
+});
+
+// Filter out empty groups
+const nonEmptyGroups = groupOrder.filter(group => groupedFields[group].length > 0);
+
+// Story tips for the memories section
+const storyTips = [
+  'How did you meet or when did your relationship begin?',
+  'What are your favorite memories together?',
+  'What makes this person special to you?',
+  'Any nicknames, inside jokes, or special phrases?',
+  'What do you want them to feel when they hear this song?',
+];
 ---
 
 <PublicLayout
@@ -74,7 +291,7 @@ const occasionSlug = url.searchParams.get('occasion') || 'wedding';
           </div>
           <div class="text-right">
             <p class="text-text-muted text-sm">Occasion</p>
-            <p class="text-text-primary font-medium capitalize" id="occasion-name">{occasionSlug}</p>
+            <p class="text-text-primary font-medium capitalize" id="occasion-name">{occasionName}</p>
           </div>
           <a
             href={`/order/${occasionSlug}?package=${packageSlug}`}
@@ -90,142 +307,187 @@ const occasionSlug = url.searchParams.get('occasion') || 'wedding';
         <input type="hidden" name="package_slug" value={packageSlug} />
         <input type="hidden" name="occasion_slug" value={occasionSlug} />
 
-        <!-- Section 1: About the Recipient -->
-        <Card variant="elevated">
-          <h2 class="text-xl font-heading font-semibold text-text-primary mb-6 flex items-center gap-2">
-            <span class="w-8 h-8 rounded-full bg-accent-gold/20 flex items-center justify-center text-accent-gold text-sm font-bold">1</span>
-            About the Recipient
-          </h2>
+        <!-- Dynamic Field Groups -->
+        {nonEmptyGroups.map((group, groupIndex) => (
+          <Card variant="elevated">
+            <h2 class="text-xl font-heading font-semibold text-text-primary mb-6 flex items-center gap-2">
+              <span class="w-8 h-8 rounded-full bg-accent-gold/20 flex items-center justify-center text-accent-gold text-sm font-bold">
+                {groupIndex + 1}
+              </span>
+              {groupLabels[group]}
+            </h2>
 
-          <div class="space-y-4">
-            <Input
-              label="Who is this song for?"
-              name="recipient_name"
-              placeholder="e.g., Sarah, Mom, John & Mary"
-              required
-              hint="The person or people this song celebrates"
-            />
+            <div class="space-y-4">
+              {groupedFields[group].map((field) => (
+                <div class="field-container" data-field-name={field.field_name}>
+                  {/* Text Input */}
+                  {field.field_type === 'text' && (
+                    <Input
+                      label={field.field_label}
+                      name={field.field_name}
+                      placeholder={field.placeholder || ''}
+                      required={field.required}
+                      hint={field.help_text || undefined}
+                      maxlength={field.validation_rules?.max_length}
+                    />
+                  )}
 
-            <div>
-              <label class="block text-sm font-medium text-text-primary mb-2">
-                Your relationship to them <span class="text-status-error">*</span>
-              </label>
-              <select
-                name="recipient_relationship"
-                required
-                class="w-full px-4 py-3 bg-primary-cardBlack border border-text-muted/30 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-gold/50 focus:border-accent-gold"
-              >
-                <option value="">Select relationship</option>
-                <option value="spouse">Spouse / Partner</option>
-                <option value="parent">Parent</option>
-                <option value="child">Child</option>
-                <option value="sibling">Sibling</option>
-                <option value="friend">Friend</option>
-                <option value="grandparent">Grandparent</option>
-                <option value="other_family">Other Family Member</option>
-                <option value="colleague">Colleague</option>
-                <option value="other">Other</option>
-              </select>
+                  {/* Email Input */}
+                  {field.field_type === 'email' && (
+                    <Input
+                      label={field.field_label}
+                      name={field.field_name}
+                      type="email"
+                      placeholder={field.placeholder || ''}
+                      required={field.required}
+                      hint={field.help_text || undefined}
+                    />
+                  )}
+
+                  {/* Phone Input */}
+                  {field.field_type === 'phone' && (
+                    <Input
+                      label={field.field_label}
+                      name={field.field_name}
+                      type="tel"
+                      placeholder={field.placeholder || ''}
+                      required={field.required}
+                      hint={field.help_text || undefined}
+                    />
+                  )}
+
+                  {/* Number Input */}
+                  {field.field_type === 'number' && (
+                    <Input
+                      label={field.field_label}
+                      name={field.field_name}
+                      type="number"
+                      placeholder={field.placeholder || ''}
+                      required={field.required}
+                      hint={field.help_text || undefined}
+                      min={field.validation_rules?.min}
+                      max={field.validation_rules?.max}
+                    />
+                  )}
+
+                  {/* Date Input */}
+                  {field.field_type === 'date' && (
+                    <Input
+                      label={field.field_label}
+                      name={field.field_name}
+                      type="date"
+                      required={field.required}
+                      hint={field.help_text || undefined}
+                    />
+                  )}
+
+                  {/* Textarea */}
+                  {field.field_type === 'textarea' && (
+                    <>
+                      <Textarea
+                        label={field.field_label}
+                        name={field.field_name}
+                        placeholder={field.placeholder || ''}
+                        rows={8}
+                        required={field.required}
+                        maxLength={field.validation_rules?.max_length || 3000}
+                        hint={field.help_text || undefined}
+                      />
+                      {/* Show story tips for story field */}
+                      {field.field_name === 'story' && (
+                        <div class="bg-primary-hoverBlack rounded-lg p-4 text-sm mt-4">
+                          <p class="text-text-primary font-medium mb-2">Tips for a great story:</p>
+                          <ul class="text-text-secondary space-y-1">
+                            {storyTips.map((tip) => (
+                              <li>• {tip}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {/* Select Dropdown */}
+                  {field.field_type === 'select' && (
+                    <div>
+                      <label class="block text-sm font-medium text-text-primary mb-2">
+                        {field.field_label} {field.required && <span class="text-status-error">*</span>}
+                      </label>
+                      <select
+                        name={field.field_name}
+                        required={field.required}
+                        class="w-full px-4 py-3 bg-primary-cardBlack border border-text-muted/30 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-gold/50 focus:border-accent-gold"
+                      >
+                        <option value="">{field.placeholder || 'Select an option'}</option>
+                        {field.options?.map((opt) => (
+                          <option value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
+                      {field.help_text && (
+                        <p class="text-text-muted text-sm mt-1">{field.help_text}</p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Radio Buttons */}
+                  {field.field_type === 'radio' && (
+                    <div>
+                      <label class="block text-sm font-medium text-text-primary mb-2">
+                        {field.field_label} {field.required && <span class="text-status-error">*</span>}
+                      </label>
+                      <div class="space-y-2">
+                        {field.options?.map((opt) => (
+                          <label class="flex items-center gap-3 p-3 bg-primary-hoverBlack rounded-lg cursor-pointer hover:bg-primary-cardBlack transition-colors">
+                            <input
+                              type="radio"
+                              name={field.field_name}
+                              value={opt.value}
+                              required={field.required}
+                              class="w-4 h-4 text-accent-gold bg-primary-cardBlack border-text-muted/30 focus:ring-accent-gold"
+                            />
+                            <span class="text-text-secondary">{opt.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                      {field.help_text && (
+                        <p class="text-text-muted text-sm mt-2">{field.help_text}</p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Checkbox Group */}
+                  {field.field_type === 'checkbox' && (
+                    <div>
+                      <label class="block text-sm font-medium text-text-primary mb-2">
+                        {field.field_label}
+                      </label>
+                      <div class="flex flex-wrap gap-2">
+                        {field.options?.map((opt) => (
+                          <label class="mood-tag">
+                            <input type="checkbox" name={field.field_name} value={opt.value} class="sr-only" />
+                            <span class="px-4 py-2 rounded-full border border-text-muted/30 text-text-secondary text-sm cursor-pointer hover:border-accent-gold hover:text-accent-gold transition-colors">
+                              {opt.label}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                      {field.help_text && (
+                        <p class="text-text-muted text-sm mt-2">{field.help_text}</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
-
-            <Input
-              label="When is the occasion?"
-              name="occasion_date"
-              type="date"
-              hint="This helps us prioritize delivery"
-            />
-          </div>
-        </Card>
-
-        <!-- Section 2: Your Story -->
-        <Card variant="elevated">
-          <h2 class="text-xl font-heading font-semibold text-text-primary mb-6 flex items-center gap-2">
-            <span class="w-8 h-8 rounded-full bg-accent-gold/20 flex items-center justify-center text-accent-gold text-sm font-bold">2</span>
-            Your Story
-          </h2>
-
-          <div class="space-y-4">
-            <Textarea
-              label="Tell us about your story"
-              name="story"
-              placeholder="Share the memories, moments, and feelings you want captured in the song. Include specific details, inside jokes, meaningful places, or special phrases that matter to you both..."
-              rows={8}
-              required
-              maxLength={3000}
-              hint="This is the heart of your song. The more detail, the better!"
-            />
-
-            <div class="bg-primary-hoverBlack rounded-lg p-4 text-sm">
-              <p class="text-text-primary font-medium mb-2">Tips for a great story:</p>
-              <ul class="text-text-secondary space-y-1">
-                <li>• How did you meet or when did your relationship begin?</li>
-                <li>• What are your favorite memories together?</li>
-                <li>• What makes this person special to you?</li>
-                <li>• Any nicknames, inside jokes, or special phrases?</li>
-                <li>• What do you want them to feel when they hear this song?</li>
-              </ul>
-            </div>
-          </div>
-        </Card>
-
-        <!-- Section 3: Music Preferences -->
-        <Card variant="elevated">
-          <h2 class="text-xl font-heading font-semibold text-text-primary mb-6 flex items-center gap-2">
-            <span class="w-8 h-8 rounded-full bg-accent-gold/20 flex items-center justify-center text-accent-gold text-sm font-bold">3</span>
-            Music Preferences
-          </h2>
-
-          <div class="space-y-4">
-            <div>
-              <label class="block text-sm font-medium text-text-primary mb-2">
-                Preferred genre/style
-              </label>
-              <select
-                name="genre"
-                class="w-full px-4 py-3 bg-primary-cardBlack border border-text-muted/30 rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-gold/50 focus:border-accent-gold"
-              >
-                <option value="">Let our artists decide</option>
-                <option value="pop">Pop</option>
-                <option value="rnb">R&B / Soul</option>
-                <option value="acoustic">Acoustic</option>
-                <option value="country">Country</option>
-                <option value="gospel">Gospel</option>
-                <option value="jazz">Jazz</option>
-                <option value="afrobeats">Afrobeats</option>
-                <option value="classical">Classical</option>
-              </select>
-            </div>
-
-            <div>
-              <label class="block text-sm font-medium text-text-primary mb-2">
-                Mood/Feeling
-              </label>
-              <div class="flex flex-wrap gap-2">
-                {['Romantic', 'Upbeat', 'Emotional', 'Celebratory', 'Nostalgic', 'Inspirational'].map((mood) => (
-                  <label class="mood-tag">
-                    <input type="checkbox" name="moods" value={mood.toLowerCase()} class="sr-only" />
-                    <span class="px-4 py-2 rounded-full border border-text-muted/30 text-text-secondary text-sm cursor-pointer hover:border-accent-gold hover:text-accent-gold transition-colors">
-                      {mood}
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <Textarea
-              label="Any specific requests?"
-              name="special_requests"
-              placeholder="Reference songs you like, specific lyrics to include, or anything else we should know..."
-              rows={4}
-              maxLength={1000}
-            />
-          </div>
-        </Card>
+          </Card>
+        ))}
 
         <!-- Currency Selection -->
         <Card variant="elevated">
           <h2 class="text-xl font-heading font-semibold text-text-primary mb-6 flex items-center gap-2">
-            <span class="w-8 h-8 rounded-full bg-accent-gold/20 flex items-center justify-center text-accent-gold text-sm font-bold">4</span>
+            <span class="w-8 h-8 rounded-full bg-accent-gold/20 flex items-center justify-center text-accent-gold text-sm font-bold">
+              {nonEmptyGroups.length + 1}
+            </span>
             Payment Currency
           </h2>
 
@@ -315,7 +577,7 @@ const occasionSlug = url.searchParams.get('occasion') || 'wedding';
     });
   });
 
-  // Mood tags
+  // Checkbox/Mood tags interaction
   const moodTags = document.querySelectorAll('.mood-tag');
   moodTags.forEach((tag) => {
     const input = tag.querySelector('input') as HTMLInputElement;
@@ -358,27 +620,52 @@ const occasionSlug = url.searchParams.get('occasion') || 'wedding';
 
     const formData = new FormData(form);
 
-    // Collect moods
-    const moods: string[] = [];
-    formData.getAll('moods').forEach((mood) => moods.push(mood as string));
+    // Collect all form data dynamically
+    const questionnaire: Record<string, unknown> = {};
+
+    // Process form data
+    for (const [key, value] of formData.entries()) {
+      if (key === 'package_slug' || key === 'occasion_slug' || key === 'currency') {
+        continue; // Skip meta fields
+      }
+
+      // Handle checkbox fields (collect as array)
+      const existingValue = questionnaire[key];
+      if (existingValue !== undefined) {
+        if (Array.isArray(existingValue)) {
+          existingValue.push(value as string);
+        } else {
+          questionnaire[key] = [existingValue, value as string];
+        }
+      } else {
+        questionnaire[key] = value;
+      }
+    }
+
+    // Clean up empty values
+    Object.keys(questionnaire).forEach(key => {
+      if (questionnaire[key] === '' || questionnaire[key] === undefined) {
+        delete questionnaire[key];
+      }
+    });
 
     const data = {
       package_slug: formData.get('package_slug'),
       occasion_slug: formData.get('occasion_slug'),
       currency: formData.get('currency'),
-      questionnaire: {
-        recipient_name: formData.get('recipient_name'),
-        recipient_relationship: formData.get('recipient_relationship'),
-        occasion_date: formData.get('occasion_date') || undefined,
-        story: formData.get('story'),
-        genre: formData.get('genre') || undefined,
-        moods: moods.length > 0 ? moods : undefined,
-        special_requests: formData.get('special_requests') || undefined,
-      },
+      questionnaire,
     };
 
-    // Validate
-    if (!data.questionnaire.recipient_name || !data.questionnaire.story) {
+    // Validate required fields
+    const requiredMissing: string[] = [];
+    document.querySelectorAll('[required]').forEach((el) => {
+      const name = (el as HTMLInputElement).name;
+      if (!questionnaire[name]) {
+        requiredMissing.push(name);
+      }
+    });
+
+    if (requiredMissing.length > 0) {
       showError('Please fill in all required fields.');
       return;
     }

@@ -9,35 +9,55 @@
 
 import type { APIRoute } from 'astro';
 
-export const POST: APIRoute = async ({ request, cookies }) => {
+export const POST: APIRoute = async ({ request }) => {
+  console.log('[Session API] POST request received');
+
   try {
     const body = await request.json();
     const { access_token, refresh_token } = body;
 
+    console.log('[Session API] Tokens received - access:', access_token ? `${access_token.substring(0, 20)}...` : 'missing');
+
     if (!access_token || !refresh_token) {
+      console.log('[Session API] Missing tokens');
       return new Response(
         JSON.stringify({ error: 'Missing tokens' }),
         { status: 400, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
-    // Set HTTP-only cookies for server-side auth
+    // Build cookie options
     const isProduction = import.meta.env.PROD;
-    const cookieOptions = {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: 'lax' as const,
-      path: '/',
-      maxAge: 60 * 60 * 24 * 7, // 7 days
-    };
+    const cookieOptions = [
+      'Path=/',
+      `Max-Age=${60 * 60 * 24 * 7}`, // 7 days
+      'HttpOnly',
+      'SameSite=Lax',
+    ];
 
-    cookies.set('sb-access-token', access_token, cookieOptions);
-    cookies.set('sb-refresh-token', refresh_token, cookieOptions);
+    if (isProduction) {
+      cookieOptions.push('Secure');
+    }
 
-    return new Response(
+    const cookieString = cookieOptions.join('; ');
+
+    // Create response with Set-Cookie headers
+    const response = new Response(
       JSON.stringify({ success: true }),
-      { status: 200, headers: { 'Content-Type': 'application/json' } }
+      {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      }
     );
+
+    // Add cookies directly to response headers
+    response.headers.append('Set-Cookie', `sb-access-token=${access_token}; ${cookieString}`);
+    response.headers.append('Set-Cookie', `sb-refresh-token=${refresh_token}; ${cookieString}`);
+
+    console.log('[Session API] Cookies set successfully');
+    return response;
   } catch (error) {
     console.error('Session sync error:', error);
     return new Response(
@@ -47,13 +67,22 @@ export const POST: APIRoute = async ({ request, cookies }) => {
   }
 };
 
-export const DELETE: APIRoute = async ({ cookies }) => {
-  // Clear session cookies
-  cookies.delete('sb-access-token', { path: '/' });
-  cookies.delete('sb-refresh-token', { path: '/' });
+export const DELETE: APIRoute = async () => {
+  // Clear session cookies by setting them to expire immediately
+  const expiredCookie = 'Path=/; Max-Age=0; HttpOnly; SameSite=Lax';
 
-  return new Response(
+  const response = new Response(
     JSON.stringify({ success: true }),
-    { status: 200, headers: { 'Content-Type': 'application/json' } }
+    {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    }
   );
+
+  response.headers.append('Set-Cookie', `sb-access-token=; ${expiredCookie}`);
+  response.headers.append('Set-Cookie', `sb-refresh-token=; ${expiredCookie}`);
+
+  return response;
 };

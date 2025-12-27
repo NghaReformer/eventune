@@ -7,13 +7,15 @@
  */
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import { getCustomerDetail } from '../../../services/admin.service';
-import { hasPermission } from '../../../lib/auth/admin-session';
-import type { AdminSessionData } from '../../../lib/auth/admin-session';
+import { hasPermission, getPermissionsForRole } from '../../../lib/auth/admin-session';
+import type { SessionData } from '../../../lib/auth/session';
 import { isValidUUID } from '../../../lib/security/validation';
 
-// Get admin session from layout
-const adminSession = Astro.locals.adminSession as AdminSessionData;
-const { permissions } = adminSession;
+// Get session from middleware (set before page runs)
+const session = Astro.locals.session as SessionData;
+const profile = session?.profile;
+const adminRole = profile?.admin_role as 'super_admin' | 'order_manager' | 'support' | null;
+const permissions = adminRole ? getPermissionsForRole(adminRole) : [];
 
 // Verify customers permission
 if (!hasPermission(permissions, 'customers:view')) {

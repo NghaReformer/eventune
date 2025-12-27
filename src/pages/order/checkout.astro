@@ -320,7 +320,7 @@ if (!orderId) {
           questionnaire:questionnaires(recipient_name)
         `)
         .eq('id', orderId)
-        .eq('user_id', session.user.id)
+        .eq('customer_id', session.user.id)
         .single();
 
       if (error || !order) {
@@ -330,7 +330,7 @@ if (!orderId) {
 
       if (order.status !== 'pending_payment') {
         if (order.status === 'paid' || order.status === 'in_production') {
-          window.location.href = `/portal/orders/${orderId}`;
+          window.location.href = `/dashboard/orders/${orderId}`;
           return;
         }
         showError('This order is no longer available for payment.');

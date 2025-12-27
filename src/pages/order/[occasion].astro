@@ -429,9 +429,8 @@ if (!occasion) {
     const packageSlug = selectedPackage?.getAttribute('data-package') || 'classic';
     const occasionSlug = window.location.pathname.split('/').pop();
 
-    // TODO: Navigate to questionnaire page
-    // For now, show an alert
-    alert(`Selected package: ${packageSlug}\nOccasion: ${occasionSlug}\n\nQuestionnaire page coming soon!`);
+    // Navigate to questionnaire page
+    window.location.href = `/order/questionnaire?package=${packageSlug}&occasion=${occasionSlug}`;
   });
 
   // Currency toggle

@@ -166,14 +166,13 @@ export interface RefundResponse {
 export interface AuditLogEntry {
   id: string;
   admin_id: string;
-  admin_email: string;
   action: string;
-  target_type: string;
-  target_id: string | null;
-  old_values: Record<string, unknown> | null;
-  new_values: Record<string, unknown> | null;
-  ip_address: string;
-  user_agent: string;
+  entity_type: string;
+  entity_id: string;
+  old_data: Record<string, unknown> | null;
+  new_data: Record<string, unknown> | null;
+  ip_address: string | null;
+  user_agent: string | null;
   created_at: string;
 }
 

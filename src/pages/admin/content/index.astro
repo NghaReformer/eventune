@@ -12,13 +12,15 @@ import {
   getContentFAQ,
   getContentTestimonials,
 } from '../../../services/admin.service';
-import { hasPermission } from '../../../lib/auth/admin-session';
-import type { AdminSessionData } from '../../../lib/auth/admin-session';
+import { hasPermission, getPermissionsForRole } from '../../../lib/auth/admin-session';
+import type { SessionData } from '../../../lib/auth/session';
 
-// Get admin session from layout
-const adminSession = Astro.locals.adminSession as AdminSessionData;
-const { permissions } = adminSession;
-const csrfToken = Astro.locals.csrfToken as string;
+// Get session from middleware (set before page runs)
+const session = Astro.locals.session as SessionData;
+const profile = session?.profile;
+const adminRole = profile?.admin_role as 'super_admin' | 'order_manager' | 'support' | null;
+const permissions = adminRole ? getPermissionsForRole(adminRole) : [];
+const csrfToken = (Astro.locals.csrfToken as string) || '';
 
 // Verify content permission
 if (!hasPermission(permissions, 'content:view')) {
@@ -47,13 +49,77 @@ function formatSlug(slug: string): string {
 <AdminLayout title="Content" activeNav="content">
   <!-- CSRF Token for AJAX requests -->
   <input type="hidden" id="csrf-token" value={csrfToken} />
+  <script is:inline>
+    // Debug: Log CSRF token on page load
+    console.log('[Content Page] CSRF token:', {
+      value: document.getElementById('csrf-token')?.value,
+      length: document.getElementById('csrf-token')?.value?.length,
+    });
+  </script>
 
   <!-- Page Header -->
   <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-8">
     <div>
       <h2 class="font-display text-2xl text-admin-cream">Content Management</h2>
-      <p class="text-admin-cream/50 mt-1">Manage packages, occasions, FAQ, and testimonials</p>
+      <p class="text-admin-cream/50 mt-1">Manage packages, occasions, samples, FAQ, and testimonials</p>
     </div>
+  </div>
+
+  <!-- Quick Links to Full Management Pages -->
+  <div class="quick-links-grid mb-8">
+    <a href="/admin/content/occasions" class="quick-link-card">
+      <div class="quick-link-icon">
+        <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
+        </svg>
+      </div>
+      <div class="quick-link-content">
+        <h3 class="quick-link-title">Manage Occasions</h3>
+        <p class="quick-link-desc">Full CRUD for occasion categories</p>
+        <span class="quick-link-count">{occasions.length} occasions</span>
+      </div>
+      <div class="quick-link-arrow">
+        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+        </svg>
+      </div>
+    </a>
+
+    <a href="/admin/content/samples" class="quick-link-card">
+      <div class="quick-link-icon">
+        <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+        </svg>
+      </div>
+      <div class="quick-link-content">
+        <h3 class="quick-link-title">Manage Samples</h3>
+        <p class="quick-link-desc">Upload and manage sample songs</p>
+        <span class="quick-link-count">Sample library</span>
+      </div>
+      <div class="quick-link-arrow">
+        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+        </svg>
+      </div>
+    </a>
+
+    <a href="/admin/content/questionnaire" class="quick-link-card">
+      <div class="quick-link-icon">
+        <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+        </svg>
+      </div>
+      <div class="quick-link-content">
+        <h3 class="quick-link-title">Questionnaire Builder</h3>
+        <p class="quick-link-desc">Dynamic form fields by occasion</p>
+        <span class="quick-link-count">Custom questions</span>
+      </div>
+      <div class="quick-link-arrow">
+        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+        </svg>
+      </div>
+    </a>
   </div>
 
   <!-- Tabs -->
@@ -107,9 +173,19 @@ function formatSlug(slug: string): string {
     <!-- Packages Tab -->
     {activeTab === 'packages' && (
       <div class="content-section">
-        <div class="section-header">
-          <h3 class="font-display text-lg text-admin-cream">Service Packages</h3>
-          <p class="text-admin-cream/40 text-sm">Manage pricing and availability</p>
+        <div class="section-header flex-header">
+          <div>
+            <h3 class="font-display text-lg text-admin-cream">Service Packages</h3>
+            <p class="text-admin-cream/40 text-sm">Manage pricing and availability</p>
+          </div>
+          {canEdit && (
+            <button class="btn-add" id="add-package-btn">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+              </svg>
+              Add Package
+            </button>
+          )}
         </div>
 
         <div class="packages-grid">
@@ -180,6 +256,21 @@ function formatSlug(slug: string): string {
                   </span>
                 </div>
               </div>
+
+              {canEdit && (
+                <div class="card-actions">
+                  <button class="btn-icon edit-package-btn" data-id={pkg.id} data-package={JSON.stringify(pkg)} title="Edit">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </button>
+                  <button class="btn-icon btn-danger delete-package-btn" data-id={pkg.id} data-name={pkg.name} title="Delete">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -236,9 +327,19 @@ function formatSlug(slug: string): string {
     <!-- FAQ Tab -->
     {activeTab === 'faq' && (
       <div class="content-section">
-        <div class="section-header">
-          <h3 class="font-display text-lg text-admin-cream">FAQ Items</h3>
-          <p class="text-admin-cream/40 text-sm">Manage frequently asked questions</p>
+        <div class="section-header flex-header">
+          <div>
+            <h3 class="font-display text-lg text-admin-cream">FAQ Items</h3>
+            <p class="text-admin-cream/40 text-sm">Manage frequently asked questions</p>
+          </div>
+          {canEdit && (
+            <button class="btn-add" id="add-faq-btn">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+              </svg>
+              Add FAQ
+            </button>
+          )}
         </div>
 
         <div class="faq-list">
@@ -265,6 +366,21 @@ function formatSlug(slug: string): string {
               </div>
               <h4 class="faq-question">{faq.question}</h4>
               <p class="faq-answer">{faq.answer}</p>
+
+              {canEdit && (
+                <div class="card-actions faq-actions">
+                  <button class="btn-icon edit-faq-btn" data-id={faq.id} data-faq={JSON.stringify(faq)} title="Edit">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </button>
+                  <button class="btn-icon btn-danger delete-faq-btn" data-id={faq.id} data-question={faq.question} title="Delete">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -280,9 +396,19 @@ function formatSlug(slug: string): string {
     <!-- Testimonials Tab -->
     {activeTab === 'testimonials' && (
       <div class="content-section">
-        <div class="section-header">
-          <h3 class="font-display text-lg text-admin-cream">Customer Testimonials</h3>
-          <p class="text-admin-cream/40 text-sm">Manage customer reviews and testimonials</p>
+        <div class="section-header flex-header">
+          <div>
+            <h3 class="font-display text-lg text-admin-cream">Customer Testimonials</h3>
+            <p class="text-admin-cream/40 text-sm">Manage customer reviews and testimonials (text & video)</p>
+          </div>
+          {canEdit && (
+            <button class="btn-add" id="add-testimonial-btn">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+              </svg>
+              Add Testimonial
+            </button>
+          )}
         </div>
 
         {testimonials.length === 0 ? (
@@ -328,6 +454,15 @@ function formatSlug(slug: string): string {
 
                 <blockquote class="testimonial-quote">"{test.quote}"</blockquote>
 
+                {(test as any).video_url && (
+                  <div class="testimonial-video-badge">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                    <span>Video Testimonial</span>
+                  </div>
+                )}
+
                 <div class="testimonial-footer">
                   {test.occasion && (
                     <span class="testimonial-occasion">{formatSlug(test.occasion)}</span>
@@ -349,12 +484,293 @@ function formatSlug(slug: string): string {
                     <span class="featured-badge">Featured</span>
                   )}
                 </div>
+
+                {canEdit && (
+                  <div class="card-actions">
+                    <button class="btn-icon edit-testimonial-btn" data-id={test.id} data-testimonial={JSON.stringify(test)} title="Edit">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    </button>
+                    <button class="btn-icon btn-danger delete-testimonial-btn" data-id={test.id} data-name={test.customer_name} title="Delete">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
         )}
       </div>
     )}
+  </div>
+
+  <!-- Package Modal -->
+  <div class="modal-overlay" id="package-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title" id="package-modal-title">Add Package</h3>
+        <button class="modal-close" data-close="package-modal">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <form id="package-form">
+        <div class="modal-body">
+          <input type="hidden" name="id" id="package-id" />
+
+          <div class="form-group">
+            <label class="form-label">Package Name *</label>
+            <input type="text" name="name" id="package-name" class="form-input" required />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Slug *</label>
+            <input type="text" name="slug" id="package-slug" class="form-input" required placeholder="e.g., express, classic" />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Description</label>
+            <textarea name="description" id="package-description" class="form-textarea"></textarea>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Price USD *</label>
+              <input type="number" name="price_usd" id="package-price-usd" class="form-input" required min="0" step="0.01" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Price XAF *</label>
+              <input type="number" name="price_xaf" id="package-price-xaf" class="form-input" required min="0" />
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Song Length Min (min)</label>
+              <input type="number" name="song_length_min" id="package-song-min" class="form-input" min="0" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Song Length Max (min)</label>
+              <input type="number" name="song_length_max" id="package-song-max" class="form-input" min="0" />
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Delivery Days Min</label>
+              <input type="number" name="delivery_days_min" id="package-delivery-min" class="form-input" min="1" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Delivery Days Max</label>
+              <input type="number" name="delivery_days_max" id="package-delivery-max" class="form-input" min="1" />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Revision Count</label>
+            <input type="number" name="revision_count" id="package-revisions" class="form-input" min="0" />
+          </div>
+
+          <div class="form-group">
+            <label class="form-checkbox">
+              <input type="checkbox" name="includes_discovery_call" id="package-discovery" />
+              Includes Discovery Call
+            </label>
+          </div>
+
+          <div class="form-group">
+            <label class="form-checkbox">
+              <input type="checkbox" name="includes_instrumental" id="package-instrumental" />
+              Includes Instrumental
+            </label>
+          </div>
+
+          <div class="form-group">
+            <label class="form-checkbox">
+              <input type="checkbox" name="includes_full_rights" id="package-rights" />
+              Includes Full Rights
+            </label>
+          </div>
+
+          <div class="form-group">
+            <label class="form-checkbox">
+              <input type="checkbox" name="is_popular" id="package-popular" />
+              Mark as Popular
+            </label>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Display Order</label>
+            <input type="number" name="display_order" id="package-order" class="form-input" min="0" value="0" />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" data-close="package-modal">Cancel</button>
+          <button type="submit" class="btn-primary" id="package-submit">Save Package</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- FAQ Modal -->
+  <div class="modal-overlay" id="faq-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title" id="faq-modal-title">Add FAQ</h3>
+        <button class="modal-close" data-close="faq-modal">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <form id="faq-form">
+        <div class="modal-body">
+          <input type="hidden" name="id" id="faq-id" />
+
+          <div class="form-group">
+            <label class="form-label">Question *</label>
+            <input type="text" name="question" id="faq-question" class="form-input" required />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Answer *</label>
+            <textarea name="answer" id="faq-answer" class="form-textarea" required style="min-height: 120px;"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Category</label>
+            <select name="category" id="faq-category" class="form-select">
+              <option value="">Select Category</option>
+              <option value="general">General</option>
+              <option value="ordering">Ordering</option>
+              <option value="payment">Payment</option>
+              <option value="delivery">Delivery</option>
+              <option value="revisions">Revisions</option>
+              <option value="rights">Rights & Usage</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Display Order</label>
+            <input type="number" name="display_order" id="faq-order" class="form-input" min="0" value="0" />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" data-close="faq-modal">Cancel</button>
+          <button type="submit" class="btn-primary" id="faq-submit">Save FAQ</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Testimonial Modal -->
+  <div class="modal-overlay" id="testimonial-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title" id="testimonial-modal-title">Add Testimonial</h3>
+        <button class="modal-close" data-close="testimonial-modal">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <form id="testimonial-form">
+        <div class="modal-body">
+          <input type="hidden" name="id" id="testimonial-id" />
+
+          <div class="form-group">
+            <label class="form-label">Customer Name *</label>
+            <input type="text" name="customer_name" id="testimonial-name" class="form-input" required />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Customer Location</label>
+            <input type="text" name="customer_location" id="testimonial-location" class="form-input" placeholder="e.g., New York, USA" />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Quote/Testimonial *</label>
+            <textarea name="quote" id="testimonial-quote" class="form-textarea" required style="min-height: 100px;"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Occasion</label>
+            <select name="occasion" id="testimonial-occasion" class="form-select">
+              <option value="">Select Occasion</option>
+              {occasions.map((occ) => (
+                <option value={occ.slug}>{occ.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Rating (1-5)</label>
+              <select name="rating" id="testimonial-rating" class="form-select">
+                <option value="">No Rating</option>
+                <option value="5">5 Stars</option>
+                <option value="4">4 Stars</option>
+                <option value="3">3 Stars</option>
+                <option value="2">2 Stars</option>
+                <option value="1">1 Star</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Display Order</label>
+              <input type="number" name="display_order" id="testimonial-order" class="form-input" min="0" value="0" />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Customer Image URL</label>
+            <input type="url" name="image_url" id="testimonial-image" class="form-input" placeholder="https://..." />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Video URL (YouTube/Vimeo)</label>
+            <input type="url" name="video_url" id="testimonial-video" class="form-input" placeholder="https://youtube.com/watch?v=..." />
+          </div>
+
+          <div class="form-group">
+            <label class="form-checkbox">
+              <input type="checkbox" name="is_featured" id="testimonial-featured" />
+              Feature this testimonial
+            </label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" data-close="testimonial-modal">Cancel</button>
+          <button type="submit" class="btn-primary" id="testimonial-submit">Save Testimonial</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Delete Confirmation Modal -->
+  <div class="modal-overlay" id="delete-modal">
+    <div class="modal" style="max-width: 24rem;">
+      <div class="modal-body">
+        <div class="delete-confirm-content">
+          <div class="delete-icon">
+            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </div>
+          <h3 class="delete-title">Confirm Delete</h3>
+          <p class="delete-message">Are you sure you want to delete:</p>
+          <p class="delete-item-name" id="delete-item-name"></p>
+          <p class="delete-message" style="margin-top: 0.5rem;">This action cannot be undone.</p>
+        </div>
+      </div>
+      <div class="modal-footer" style="justify-content: center;">
+        <button type="button" class="btn-secondary" data-close="delete-modal">Cancel</button>
+        <button type="button" class="btn-danger-full" id="confirm-delete-btn">Delete</button>
+      </div>
+    </div>
   </div>
 </AdminLayout>
 
@@ -367,6 +783,78 @@ function formatSlug(slug: string): string {
   }
 
   .font-display { font-family: 'Playfair Display', serif; }
+
+  /* Quick Links */
+  .quick-links-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1rem;
+  }
+
+  .quick-link-card {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.25rem;
+    background: var(--admin-card);
+    border: 1px solid rgba(212, 175, 55, 0.1);
+    border-radius: 1rem;
+    transition: all 0.2s ease;
+    cursor: pointer;
+  }
+
+  .quick-link-card:hover {
+    border-color: rgba(212, 175, 55, 0.3);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  }
+
+  .quick-link-icon {
+    flex-shrink: 0;
+    width: 3rem;
+    height: 3rem;
+    border-radius: 0.75rem;
+    background: linear-gradient(135deg, rgba(212, 175, 55, 0.15) 0%, rgba(212, 175, 55, 0.05) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--gold);
+  }
+
+  .quick-link-content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .quick-link-title {
+    font-weight: 600;
+    color: var(--admin-cream);
+    font-size: 1rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .quick-link-desc {
+    font-size: 0.875rem;
+    color: rgba(245, 245, 245, 0.5);
+    margin-bottom: 0.25rem;
+  }
+
+  .quick-link-count {
+    font-size: 0.75rem;
+    color: var(--gold);
+    font-weight: 500;
+  }
+
+  .quick-link-arrow {
+    flex-shrink: 0;
+    color: rgba(245, 245, 245, 0.3);
+    transition: all 0.2s ease;
+  }
+
+  .quick-link-card:hover .quick-link-arrow {
+    color: var(--gold);
+    transform: translateX(4px);
+  }
 
   /* Tabs */
   .tabs-container {
@@ -866,12 +1354,381 @@ function formatSlug(slug: string): string {
   /* Color utilities */
   .text-gold { color: var(--gold); }
   .text-admin-cream { color: var(--admin-cream); }
+
+  /* Flex Header */
+  .flex-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  /* Buttons */
+  .btn-add {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1rem;
+    background: linear-gradient(135deg, rgba(212, 175, 55, 0.15) 0%, rgba(212, 175, 55, 0.1) 100%);
+    border: 1px solid rgba(212, 175, 55, 0.3);
+    border-radius: 0.5rem;
+    color: var(--gold);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+  }
+
+  .btn-add:hover {
+    background: linear-gradient(135deg, rgba(212, 175, 55, 0.25) 0%, rgba(212, 175, 55, 0.15) 100%);
+    border-color: rgba(212, 175, 55, 0.5);
+    transform: translateY(-1px);
+  }
+
+  .btn-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    background: rgba(245, 245, 245, 0.05);
+    border: 1px solid rgba(245, 245, 245, 0.1);
+    border-radius: 0.375rem;
+    color: rgba(245, 245, 245, 0.5);
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .btn-icon:hover {
+    background: rgba(212, 175, 55, 0.1);
+    border-color: rgba(212, 175, 55, 0.3);
+    color: var(--gold);
+  }
+
+  .btn-icon.btn-danger:hover {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #ef4444;
+  }
+
+  /* Card Actions */
+  .card-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid rgba(212, 175, 55, 0.08);
+  }
+
+  .faq-actions {
+    justify-content: flex-end;
+  }
+
+  /* Video Badge */
+  .testimonial-video-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.375rem 0.75rem;
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    border-radius: 0.375rem;
+    color: #3b82f6;
+    font-size: 0.75rem;
+    font-weight: 500;
+    margin-bottom: 0.75rem;
+  }
+
+  /* Modal Styles */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(4px);
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.2s ease;
+  }
+
+  .modal-overlay.active {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  .modal {
+    background: var(--admin-card);
+    border: 1px solid rgba(212, 175, 55, 0.15);
+    border-radius: 1rem;
+    width: 100%;
+    max-width: 32rem;
+    max-height: 90vh;
+    overflow-y: auto;
+    transform: translateY(20px);
+    transition: transform 0.2s ease;
+  }
+
+  .modal-overlay.active .modal {
+    transform: translateY(0);
+  }
+
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid rgba(212, 175, 55, 0.1);
+  }
+
+  .modal-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.25rem;
+    color: var(--gold);
+  }
+
+  .modal-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    background: rgba(245, 245, 245, 0.05);
+    border: none;
+    border-radius: 0.375rem;
+    color: rgba(245, 245, 245, 0.5);
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .modal-close:hover {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+  }
+
+  .modal-body {
+    padding: 1.5rem;
+  }
+
+  .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    padding: 1.25rem 1.5rem;
+    border-top: 1px solid rgba(212, 175, 55, 0.1);
+  }
+
+  /* Form Styles */
+  .form-group {
+    margin-bottom: 1.25rem;
+  }
+
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+
+  .form-label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: rgba(245, 245, 245, 0.7);
+    margin-bottom: 0.5rem;
+  }
+
+  .form-input,
+  .form-textarea,
+  .form-select {
+    width: 100%;
+    padding: 0.625rem 0.875rem;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(212, 175, 55, 0.15);
+    border-radius: 0.5rem;
+    color: var(--admin-cream);
+    font-size: 0.875rem;
+    transition: all 0.2s ease;
+  }
+
+  .form-input:focus,
+  .form-textarea:focus,
+  .form-select:focus {
+    outline: none;
+    border-color: rgba(212, 175, 55, 0.4);
+    box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.1);
+  }
+
+  .form-textarea {
+    min-height: 80px;
+    resize: vertical;
+  }
+
+  .form-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    color: rgba(245, 245, 245, 0.7);
+    cursor: pointer;
+  }
+
+  .form-checkbox input {
+    width: 1rem;
+    height: 1rem;
+    accent-color: var(--gold);
+  }
+
+  /* Button variants */
+  .btn-primary {
+    padding: 0.625rem 1.25rem;
+    background: linear-gradient(135deg, var(--gold) 0%, #b8963a 100%);
+    border: none;
+    border-radius: 0.5rem;
+    color: var(--admin-black);
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .btn-primary:hover {
+    filter: brightness(1.1);
+    transform: translateY(-1px);
+  }
+
+  .btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .btn-secondary {
+    padding: 0.625rem 1.25rem;
+    background: transparent;
+    border: 1px solid rgba(245, 245, 245, 0.2);
+    border-radius: 0.5rem;
+    color: rgba(245, 245, 245, 0.7);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .btn-secondary:hover {
+    background: rgba(245, 245, 245, 0.05);
+    border-color: rgba(245, 245, 245, 0.3);
+  }
+
+  .btn-danger-full {
+    padding: 0.625rem 1.25rem;
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    border: none;
+    border-radius: 0.5rem;
+    color: white;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .btn-danger-full:hover {
+    filter: brightness(1.1);
+  }
+
+  /* Confirm Delete Modal */
+  .delete-confirm-content {
+    text-align: center;
+    padding: 1rem 0;
+  }
+
+  .delete-icon {
+    width: 4rem;
+    height: 4rem;
+    margin: 0 auto 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(239, 68, 68, 0.1);
+    border-radius: 50%;
+    color: #ef4444;
+  }
+
+  .delete-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.25rem;
+    color: var(--admin-cream);
+    margin-bottom: 0.5rem;
+  }
+
+  .delete-message {
+    font-size: 0.875rem;
+    color: rgba(245, 245, 245, 0.5);
+    margin-bottom: 0.25rem;
+  }
+
+  .delete-item-name {
+    font-weight: 600;
+    color: var(--gold);
+  }
 </style>
 
 <script>
+  // Helper: Get CSRF token from cookie (always use current value)
+  const getCSRFToken = () => {
+    const match = document.cookie.match(/(?:^|;\s*)csrf-token=([^;]*)/);
+    return match ? decodeURIComponent(match[1]) : '';
+  };
+
+  // Helper: Open modal
+  function openModal(modalId: string) {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+      modal.classList.add('active');
+      document.body.style.overflow = 'hidden';
+    }
+  }
+
+  // Helper: Close modal
+  function closeModal(modalId: string) {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+      modal.classList.remove('active');
+      document.body.style.overflow = '';
+    }
+  }
+
+  // Close modals on click outside or close button
+  document.querySelectorAll('.modal-overlay').forEach(overlay => {
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        closeModal(overlay.id);
+      }
+    });
+  });
+
+  document.querySelectorAll('[data-close]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const modalId = (btn as HTMLElement).dataset.close;
+      if (modalId) closeModal(modalId);
+    });
+  });
+
+  // Close modal on Escape key
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      document.querySelectorAll('.modal-overlay.active').forEach(modal => {
+        closeModal(modal.id);
+      });
+    }
+  });
+
   // Toggle active status
   const toggleInputs = document.querySelectorAll('.toggle-active');
-  const csrfTokenEl = document.getElementById('csrf-token') as HTMLInputElement;
 
   toggleInputs.forEach(input => {
     input.addEventListener('change', async (e) => {
@@ -879,33 +1736,385 @@ function formatSlug(slug: string): string {
       const id = target.dataset.id;
       const table = target.dataset.table;
       const isActive = target.checked;
-      const csrfToken = csrfTokenEl?.value || '';
+      const csrfToken = getCSRFToken();
+
+      console.log('[Toggle] Attempting toggle:', { id, table, isActive, csrfToken: csrfToken ? 'present' : 'missing' });
 
       try {
         const response = await fetch('/api/admin/content/toggle-active', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
           body: JSON.stringify({ id, table, is_active: isActive, csrf_token: csrfToken }),
         });
 
         if (!response.ok) {
-          throw new Error('Failed to update');
+          const errorData = await response.json();
+          console.error('[Toggle] API error:', errorData);
+          throw new Error(errorData.error || 'Failed to update');
         }
 
-        // Visual feedback
         const card = target.closest('.package-card, .occasion-card, .faq-item, .testimonial-card');
         if (card) {
-          if (isActive) {
-            card.classList.remove('inactive');
-          } else {
-            card.classList.add('inactive');
-          }
+          card.classList.toggle('inactive', !isActive);
         }
+
+        console.log('[Toggle] Success');
       } catch (error) {
         console.error('Error toggling active status:', error);
-        // Revert checkbox
+        alert(error instanceof Error ? error.message : 'Failed to update status. Please refresh and try again.');
         target.checked = !isActive;
       }
     });
+  });
+
+  // ==================== PACKAGES ====================
+  const packageModal = document.getElementById('package-modal');
+  const packageForm = document.getElementById('package-form') as HTMLFormElement;
+  const packageModalTitle = document.getElementById('package-modal-title');
+
+  // Add Package button
+  document.getElementById('add-package-btn')?.addEventListener('click', () => {
+    packageForm.reset();
+    (document.getElementById('package-id') as HTMLInputElement).value = '';
+    if (packageModalTitle) packageModalTitle.textContent = 'Add Package';
+    openModal('package-modal');
+  });
+
+  // Edit Package buttons
+  document.querySelectorAll('.edit-package-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const data = JSON.parse((btn as HTMLElement).dataset.package || '{}');
+
+      (document.getElementById('package-id') as HTMLInputElement).value = data.id || '';
+      (document.getElementById('package-name') as HTMLInputElement).value = data.name || '';
+      (document.getElementById('package-slug') as HTMLInputElement).value = data.slug || '';
+      (document.getElementById('package-description') as HTMLTextAreaElement).value = data.description || '';
+      (document.getElementById('package-price-usd') as HTMLInputElement).value = data.price_usd || '';
+      (document.getElementById('package-price-xaf') as HTMLInputElement).value = data.price_xaf || '';
+      (document.getElementById('package-song-min') as HTMLInputElement).value = data.song_length_min || '';
+      (document.getElementById('package-song-max') as HTMLInputElement).value = data.song_length_max || '';
+      (document.getElementById('package-delivery-min') as HTMLInputElement).value = data.delivery_days_min || '';
+      (document.getElementById('package-delivery-max') as HTMLInputElement).value = data.delivery_days_max || '';
+      (document.getElementById('package-revisions') as HTMLInputElement).value = data.revision_count || '';
+      (document.getElementById('package-discovery') as HTMLInputElement).checked = data.includes_discovery_call || false;
+      (document.getElementById('package-instrumental') as HTMLInputElement).checked = data.includes_instrumental || false;
+      (document.getElementById('package-rights') as HTMLInputElement).checked = data.includes_full_rights || false;
+      (document.getElementById('package-popular') as HTMLInputElement).checked = data.is_popular || false;
+      (document.getElementById('package-order') as HTMLInputElement).value = data.display_order || '0';
+
+      if (packageModalTitle) packageModalTitle.textContent = 'Edit Package';
+      openModal('package-modal');
+    });
+  });
+
+  // Package form submit
+  packageForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const submitBtn = document.getElementById('package-submit') as HTMLButtonElement;
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Saving...';
+
+    const id = (document.getElementById('package-id') as HTMLInputElement).value;
+    const isUpdate = !!id;
+
+    const data = {
+      id,
+      name: (document.getElementById('package-name') as HTMLInputElement).value,
+      slug: (document.getElementById('package-slug') as HTMLInputElement).value,
+      description: (document.getElementById('package-description') as HTMLTextAreaElement).value || null,
+      price_usd: parseFloat((document.getElementById('package-price-usd') as HTMLInputElement).value),
+      price_xaf: parseInt((document.getElementById('package-price-xaf') as HTMLInputElement).value),
+      song_length_min: parseInt((document.getElementById('package-song-min') as HTMLInputElement).value) || null,
+      song_length_max: parseInt((document.getElementById('package-song-max') as HTMLInputElement).value) || null,
+      delivery_days_min: parseInt((document.getElementById('package-delivery-min') as HTMLInputElement).value) || null,
+      delivery_days_max: parseInt((document.getElementById('package-delivery-max') as HTMLInputElement).value) || null,
+      revision_count: parseInt((document.getElementById('package-revisions') as HTMLInputElement).value) || 0,
+      includes_discovery_call: (document.getElementById('package-discovery') as HTMLInputElement).checked,
+      includes_instrumental: (document.getElementById('package-instrumental') as HTMLInputElement).checked,
+      includes_full_rights: (document.getElementById('package-rights') as HTMLInputElement).checked,
+      is_popular: (document.getElementById('package-popular') as HTMLInputElement).checked,
+      display_order: parseInt((document.getElementById('package-order') as HTMLInputElement).value) || 0,
+      csrf_token: getCSRFToken(),
+    };
+
+    try {
+      const endpoint = isUpdate ? '/api/admin/content/packages/update' : '/api/admin/content/packages/create';
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to save package');
+      }
+
+      window.location.reload();
+    } catch (error) {
+      console.error('Error saving package:', error);
+      alert(error instanceof Error ? error.message : 'Failed to save package');
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Save Package';
+    }
+  });
+
+  // Delete Package buttons
+  let deletePackageId: string | null = null;
+  document.querySelectorAll('.delete-package-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      deletePackageId = (btn as HTMLElement).dataset.id || null;
+      const name = (btn as HTMLElement).dataset.name || 'this package';
+      const itemNameEl = document.getElementById('delete-item-name');
+      if (itemNameEl) itemNameEl.textContent = `"${name}"`;
+      openModal('delete-modal');
+    });
+  });
+
+  // ==================== FAQ ====================
+  const faqModal = document.getElementById('faq-modal');
+  const faqForm = document.getElementById('faq-form') as HTMLFormElement;
+  const faqModalTitle = document.getElementById('faq-modal-title');
+
+  // Add FAQ button
+  document.getElementById('add-faq-btn')?.addEventListener('click', () => {
+    faqForm.reset();
+    (document.getElementById('faq-id') as HTMLInputElement).value = '';
+    if (faqModalTitle) faqModalTitle.textContent = 'Add FAQ';
+    openModal('faq-modal');
+  });
+
+  // Edit FAQ buttons
+  document.querySelectorAll('.edit-faq-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const data = JSON.parse((btn as HTMLElement).dataset.faq || '{}');
+
+      (document.getElementById('faq-id') as HTMLInputElement).value = data.id || '';
+      (document.getElementById('faq-question') as HTMLInputElement).value = data.question || '';
+      (document.getElementById('faq-answer') as HTMLTextAreaElement).value = data.answer || '';
+      (document.getElementById('faq-category') as HTMLSelectElement).value = data.category || '';
+      (document.getElementById('faq-order') as HTMLInputElement).value = data.display_order || '0';
+
+      if (faqModalTitle) faqModalTitle.textContent = 'Edit FAQ';
+      openModal('faq-modal');
+    });
+  });
+
+  // FAQ form submit
+  faqForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const submitBtn = document.getElementById('faq-submit') as HTMLButtonElement;
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Saving...';
+
+    const id = (document.getElementById('faq-id') as HTMLInputElement).value;
+    const isUpdate = !!id;
+
+    const data = {
+      id,
+      question: (document.getElementById('faq-question') as HTMLInputElement).value,
+      answer: (document.getElementById('faq-answer') as HTMLTextAreaElement).value,
+      category: (document.getElementById('faq-category') as HTMLSelectElement).value || null,
+      display_order: parseInt((document.getElementById('faq-order') as HTMLInputElement).value) || 0,
+      csrf_token: getCSRFToken(),
+    };
+
+    try {
+      const endpoint = isUpdate ? '/api/admin/content/faq/update' : '/api/admin/content/faq/create';
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to save FAQ');
+      }
+
+      window.location.reload();
+    } catch (error) {
+      console.error('Error saving FAQ:', error);
+      alert(error instanceof Error ? error.message : 'Failed to save FAQ');
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Save FAQ';
+    }
+  });
+
+  // Delete FAQ buttons
+  let deleteFaqId: string | null = null;
+  document.querySelectorAll('.delete-faq-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      deleteFaqId = (btn as HTMLElement).dataset.id || null;
+      const question = (btn as HTMLElement).dataset.question || 'this FAQ';
+      const itemNameEl = document.getElementById('delete-item-name');
+      if (itemNameEl) itemNameEl.textContent = `"${question.substring(0, 50)}${question.length > 50 ? '...' : ''}"`;
+      openModal('delete-modal');
+    });
+  });
+
+  // ==================== TESTIMONIALS ====================
+  const testimonialModal = document.getElementById('testimonial-modal');
+  const testimonialForm = document.getElementById('testimonial-form') as HTMLFormElement;
+  const testimonialModalTitle = document.getElementById('testimonial-modal-title');
+
+  // Add Testimonial button
+  document.getElementById('add-testimonial-btn')?.addEventListener('click', () => {
+    testimonialForm.reset();
+    (document.getElementById('testimonial-id') as HTMLInputElement).value = '';
+    if (testimonialModalTitle) testimonialModalTitle.textContent = 'Add Testimonial';
+    openModal('testimonial-modal');
+  });
+
+  // Edit Testimonial buttons
+  document.querySelectorAll('.edit-testimonial-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const data = JSON.parse((btn as HTMLElement).dataset.testimonial || '{}');
+
+      (document.getElementById('testimonial-id') as HTMLInputElement).value = data.id || '';
+      (document.getElementById('testimonial-name') as HTMLInputElement).value = data.customer_name || '';
+      (document.getElementById('testimonial-location') as HTMLInputElement).value = data.customer_location || '';
+      (document.getElementById('testimonial-quote') as HTMLTextAreaElement).value = data.quote || '';
+      (document.getElementById('testimonial-occasion') as HTMLSelectElement).value = data.occasion || '';
+      (document.getElementById('testimonial-rating') as HTMLSelectElement).value = data.rating?.toString() || '';
+      (document.getElementById('testimonial-order') as HTMLInputElement).value = data.display_order || '0';
+      (document.getElementById('testimonial-image') as HTMLInputElement).value = data.image_url || '';
+      (document.getElementById('testimonial-video') as HTMLInputElement).value = data.video_url || '';
+      (document.getElementById('testimonial-featured') as HTMLInputElement).checked = data.is_featured || false;
+
+      if (testimonialModalTitle) testimonialModalTitle.textContent = 'Edit Testimonial';
+      openModal('testimonial-modal');
+    });
+  });
+
+  // Testimonial form submit
+  testimonialForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const submitBtn = document.getElementById('testimonial-submit') as HTMLButtonElement;
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Saving...';
+
+    const id = (document.getElementById('testimonial-id') as HTMLInputElement).value;
+    const isUpdate = !!id;
+    const videoUrl = (document.getElementById('testimonial-video') as HTMLInputElement).value;
+
+    // Determine video source type
+    let videoSourceType = null;
+    if (videoUrl) {
+      if (videoUrl.includes('youtube.com') || videoUrl.includes('youtu.be')) {
+        videoSourceType = 'youtube';
+      } else if (videoUrl.includes('vimeo.com')) {
+        videoSourceType = 'vimeo';
+      } else {
+        videoSourceType = 'direct';
+      }
+    }
+
+    const data = {
+      id,
+      customer_name: (document.getElementById('testimonial-name') as HTMLInputElement).value,
+      customer_location: (document.getElementById('testimonial-location') as HTMLInputElement).value || null,
+      quote: (document.getElementById('testimonial-quote') as HTMLTextAreaElement).value,
+      occasion: (document.getElementById('testimonial-occasion') as HTMLSelectElement).value || null,
+      rating: parseInt((document.getElementById('testimonial-rating') as HTMLSelectElement).value) || null,
+      display_order: parseInt((document.getElementById('testimonial-order') as HTMLInputElement).value) || 0,
+      image_url: (document.getElementById('testimonial-image') as HTMLInputElement).value || null,
+      video_url: videoUrl || null,
+      video_source_type: videoSourceType,
+      is_featured: (document.getElementById('testimonial-featured') as HTMLInputElement).checked,
+      csrf_token: getCSRFToken(),
+    };
+
+    try {
+      const endpoint = isUpdate ? '/api/admin/content/testimonials/update' : '/api/admin/content/testimonials/create';
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to save testimonial');
+      }
+
+      window.location.reload();
+    } catch (error) {
+      console.error('Error saving testimonial:', error);
+      alert(error instanceof Error ? error.message : 'Failed to save testimonial');
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Save Testimonial';
+    }
+  });
+
+  // Delete Testimonial buttons
+  let deleteTestimonialId: string | null = null;
+  document.querySelectorAll('.delete-testimonial-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      deleteTestimonialId = (btn as HTMLElement).dataset.id || null;
+      const name = (btn as HTMLElement).dataset.name || 'this testimonial';
+      const itemNameEl = document.getElementById('delete-item-name');
+      if (itemNameEl) itemNameEl.textContent = `"${name}"`;
+      openModal('delete-modal');
+    });
+  });
+
+  // ==================== DELETE CONFIRMATION ====================
+  document.getElementById('confirm-delete-btn')?.addEventListener('click', async () => {
+    const btn = document.getElementById('confirm-delete-btn') as HTMLButtonElement;
+    btn.disabled = true;
+    btn.textContent = 'Deleting...';
+
+    try {
+      let endpoint = '';
+      let id = '';
+
+      if (deletePackageId) {
+        endpoint = '/api/admin/content/packages/delete';
+        id = deletePackageId;
+      } else if (deleteFaqId) {
+        endpoint = '/api/admin/content/faq/delete';
+        id = deleteFaqId;
+      } else if (deleteTestimonialId) {
+        endpoint = '/api/admin/content/testimonials/delete';
+        id = deleteTestimonialId;
+      }
+
+      if (!endpoint || !id) {
+        throw new Error('No item selected for deletion');
+      }
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ id, csrf_token: getCSRFToken() }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to delete');
+      }
+
+      window.location.reload();
+    } catch (error) {
+      console.error('Error deleting:', error);
+      alert(error instanceof Error ? error.message : 'Failed to delete');
+      btn.disabled = false;
+      btn.textContent = 'Delete';
+    }
+  });
+
+  // Reset delete IDs when modal closes
+  document.getElementById('delete-modal')?.addEventListener('click', (e) => {
+    if ((e.target as HTMLElement).closest('[data-close]') || e.target === document.getElementById('delete-modal')) {
+      deletePackageId = null;
+      deleteFaqId = null;
+      deleteTestimonialId = null;
+    }
   });
 </script>

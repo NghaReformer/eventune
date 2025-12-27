@@ -173,11 +173,56 @@ import Button from '@/components/ui/Button.astro';
   }
 
   // Check if already logged in
-  supabase.auth.getSession().then(({ data: { session } }) => {
+  supabase.auth.getSession().then(async ({ data: { session } }) => {
+    console.log('[Login] Checking existing session:', !!session);
+
     if (session) {
-      // Redirect to portal or intended destination
-      const redirectTo = new URLSearchParams(window.location.search).get('redirectTo') || '/portal';
-      window.location.href = redirectTo;
+      // Refresh the session to get fresh tokens (getSession returns cached/potentially expired tokens)
+      console.log('[Login] Refreshing session...');
+      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+
+      if (refreshError || !refreshData.session) {
+        console.log('[Login] Session expired or invalid, clearing...', refreshError?.message);
+        await supabase.auth.signOut();
+        return;
+      }
+
+      const freshSession = refreshData.session;
+      console.log('[Login] Got fresh session, syncing to cookies...');
+
+      // Sync fresh session to cookies before redirecting
+      try {
+        const syncResponse = await fetch('/api/auth/session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            access_token: freshSession.access_token,
+            refresh_token: freshSession.refresh_token,
+          }),
+        });
+
+        console.log('[Login] Sync response status:', syncResponse.status);
+
+        if (!syncResponse.ok) {
+          console.error('[Login] Session sync failed');
+          await supabase.auth.signOut();
+          return;
+        }
+
+        // Check if cookies were set
+        console.log('[Login] Cookies after sync:', document.cookie);
+
+        // Longer delay to ensure cookies are processed
+        await new Promise(resolve => setTimeout(resolve, 300));
+
+        // Redirect to dashboard or intended destination
+        const redirectTo = new URLSearchParams(window.location.search).get('redirectTo') || '/dashboard';
+        console.log('[Login] Redirecting to:', redirectTo);
+        window.location.href = redirectTo;
+      } catch (e) {
+        console.error('[Login] Failed to sync session:', e);
+        await supabase.auth.signOut();
+      }
     }
   });
 
@@ -250,7 +295,7 @@ import Button from '@/components/ui/Button.astro';
       // Sync session to HTTP-only cookies for server-side auth
       if (data.session) {
         try {
-          await fetch('/api/auth/session', {
+          const syncResponse = await fetch('/api/auth/session', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -258,12 +303,23 @@ import Button from '@/components/ui/Button.astro';
               refresh_token: data.session.refresh_token,
             }),
           });
+
+          if (!syncResponse.ok) {
+            console.error('Session sync failed:', await syncResponse.text());
+            showError('Failed to establish session. Please try again.');
+            return;
+          }
+
+          // Small delay to ensure cookies are processed by browser
+          await new Promise(resolve => setTimeout(resolve, 100));
         } catch (syncError) {
           console.error('Failed to sync session:', syncError);
+          showError('Failed to establish session. Please try again.');
+          return;
         }
       }
 
-      const redirectTo = new URLSearchParams(window.location.search).get('redirectTo') || '/portal';
+      const redirectTo = new URLSearchParams(window.location.search).get('redirectTo') || '/dashboard';
       window.location.href = redirectTo;
 
     } catch (err) {

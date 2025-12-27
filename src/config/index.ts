@@ -5,7 +5,7 @@
 
 export { brandConfig, type BrandConfig, type BrandColors } from './brand.config';
 export { siteConfig, type SiteConfig } from './site.config';
-export { rateLimitsConfig, type RateLimitsConfig } from './rate-limits.config';
+export { rateLimitsConfig, type RateLimitConfig, type RateLimitType } from './rate-limits.config';
 export {
   securityConfig,
   type SecurityConfig,

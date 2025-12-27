@@ -7,12 +7,14 @@
  */
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import { getCustomers } from '../../../services/admin.service';
-import { hasPermission } from '../../../lib/auth/admin-session';
-import type { AdminSessionData } from '../../../lib/auth/admin-session';
+import { hasPermission, getPermissionsForRole } from '../../../lib/auth/admin-session';
+import type { SessionData } from '../../../lib/auth/session';
 
-// Get admin session from layout
-const adminSession = Astro.locals.adminSession as AdminSessionData;
-const { permissions } = adminSession;
+// Get session from middleware (set before page runs)
+const session = Astro.locals.session as SessionData;
+const profile = session?.profile;
+const adminRole = profile?.admin_role as 'super_admin' | 'order_manager' | 'support' | null;
+const permissions = adminRole ? getPermissionsForRole(adminRole) : [];
 
 // Verify customers permission
 if (!hasPermission(permissions, 'customers:view')) {
@@ -108,16 +110,16 @@ const paginationNumbers = getPaginationNumbers();
 
 <AdminLayout title="Customers" activeNav="customers">
   <!-- Page Header -->
-  <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-8">
+  <div class="page-header-section">
     <div>
-      <h2 class="font-display text-2xl text-admin-cream">Customer Management</h2>
-      <p class="text-admin-cream/50 mt-1">{total.toLocaleString()} customers total</p>
+      <h2 class="page-heading">Customer Management</h2>
+      <p class="page-subheading">{total.toLocaleString()} customers total</p>
     </div>
   </div>
 
   <!-- Filters -->
   <div class="filters-bar">
-    <form method="GET" class="flex flex-wrap items-center gap-4">
+    <form method="GET" class="filter-form">
       <!-- Search -->
       <div class="search-wrapper">
         <svg class="search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -142,7 +144,7 @@ const paginationNumbers = getPaginationNumbers();
       </div>
 
       <button type="submit" class="filter-btn">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
         </svg>
         Filter
@@ -161,12 +163,12 @@ const paginationNumbers = getPaginationNumbers();
     {customers.length === 0 ? (
       <div class="empty-state">
         <div class="empty-icon">
-          <svg class="w-12 h-12 text-gold/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg width="48" height="48" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
           </svg>
         </div>
-        <p class="text-admin-cream/50">No customers found</p>
-        {search && <p class="text-admin-cream/30 text-sm mt-1">Try adjusting your search</p>}
+        <p class="empty-text">No customers found</p>
+        {search && <p class="empty-hint">Try adjusting your search</p>}
       </div>
     ) : (
       <div class="table-wrapper">
@@ -229,7 +231,7 @@ const paginationNumbers = getPaginationNumbers();
                   <span class="last-order">
                     {customer.last_order_date
                       ? formatRelativeDate(customer.last_order_date)
-                      : <span class="text-admin-cream/30">Never</span>
+                      : <span class="never-text">Never</span>
                     }
                   </span>
                 </td>
@@ -238,7 +240,7 @@ const paginationNumbers = getPaginationNumbers();
                 </td>
                 <td>
                   <a href={`/admin/customers/${customer.id}`} class="view-btn">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                     </svg>
                   </a>
@@ -259,7 +261,7 @@ const paginationNumbers = getPaginationNumbers();
         <div class="pagination-controls">
           {page > 1 && (
             <a href={`?page=${page - 1}&search=${search}&has_orders=${hasOrders || ''}&sort_by=${sortBy}&sort_order=${sortOrder}`} class="page-btn">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
               </svg>
               Previous
@@ -280,7 +282,7 @@ const paginationNumbers = getPaginationNumbers();
           {page < totalPages && (
             <a href={`?page=${page + 1}&search=${search}&has_orders=${hasOrders || ''}&sort_by=${sortBy}&sort_order=${sortOrder}`} class="page-btn">
               Next
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
               </svg>
             </a>
@@ -300,6 +302,59 @@ const paginationNumbers = getPaginationNumbers();
   }
 
   .font-display { font-family: 'Playfair Display', serif; }
+
+  /* Page Header */
+  .page-header-section {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+
+  @media (min-width: 1024px) {
+    .page-header-section {
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+    }
+  }
+
+  .page-heading {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.5rem;
+    color: var(--admin-cream);
+    margin: 0;
+  }
+
+  .page-subheading {
+    color: rgba(245, 245, 245, 0.5);
+    font-size: 0.875rem;
+    margin: 0.25rem 0 0 0;
+  }
+
+  /* Filter Form */
+  .filter-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  /* Empty State Additions */
+  .empty-text {
+    color: rgba(245, 245, 245, 0.5);
+    margin: 0;
+  }
+
+  .empty-hint {
+    color: rgba(245, 245, 245, 0.3);
+    font-size: 0.875rem;
+    margin: 0.25rem 0 0 0;
+  }
+
+  .never-text {
+    color: rgba(245, 245, 245, 0.3);
+  }
 
   /* Filters Bar */
   .filters-bar {
