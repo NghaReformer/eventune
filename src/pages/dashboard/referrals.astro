@@ -1,180 +1,1516 @@
 ---
+/**
+ * Referral Dashboard - Agent-facing
+ * Multi-tab interface for agents to manage referrals, commissions, and payouts
+ *
+ * Security: Uses session from layout, server-side data fetching
+ */
 import DashboardLayout from '../../layouts/DashboardLayout.astro';
-import Button from '../../components/ui/Button.astro';
-import { supabase } from '../../lib/supabase/client';
-import { getSession } from '../../lib/auth/session';
+import { getServerClient } from '../../lib/supabase/server';
+import type { SessionData } from '../../lib/auth/session';
 
-const session = await getSession(Astro.cookies);
-if (!session.success) return Astro.redirect('/auth/login');
+// Session is set by middleware - if we reach here, user is authenticated
+const session = Astro.locals.session as SessionData;
+const user = session?.user;
 
-const { data: profile } = await supabase
-  .from('referral_profiles')
-  .select('*')
-  .eq('id', session.data.user.id)
-  .single();
+// Fetch data using server client
+const supabase = getServerClient();
 
-const isAgent = !!profile;
+// Check if user is an agent
+let isAgent = false;
+let agentProfile: any = null;
+let referrals: any[] = [];
+let commissions: any[] = [];
+let payouts: any[] = [];
+let stats = {
+  totalEarningsUSD: 0,
+  totalEarningsXAF: 0,
+  currentBalanceUSD: 0,
+  currentBalanceXAF: 0,
+  totalReferrals: 0,
+  conversionRate: 0,
+};
 
-// If agent, fetch referrals
-let referrals = [];
-if (isAgent) {
-  const { data } = await supabase
-    .from('referrals')
+try {
+  // Check if user is an agent
+  const { data: profileData, error: profileError } = await supabase
+    .from('referral_profiles')
     .select('*')
-    .eq('referrer_id', session.data.user.id)
-    .order('attributed_at', { ascending: false });
-  referrals = data || [];
+    .eq('id', user.id)
+    .single();
+
+  if (profileData && !profileError) {
+    isAgent = true;
+    agentProfile = profileData;
+
+    // Fetch referrals
+    const { data: referralsData } = await supabase
+      .from('referrals')
+      .select('*, profiles!referrals_referee_id_fkey(email)')
+      .eq('referrer_id', user.id)
+      .order('attributed_at', { ascending: false })
+      .limit(100);
+    referrals = referralsData || [];
+
+    // Fetch commissions
+    const { data: commissionsData } = await supabase
+      .from('commissions')
+      .select('*, orders!inner(order_number, amount_expected, currency, created_at)')
+      .eq('referrer_id', user.id)
+      .order('earned_at', { ascending: false })
+      .limit(100);
+    commissions = commissionsData || [];
+
+    // Fetch payouts
+    const { data: payoutsData } = await supabase
+      .from('payout_requests')
+      .select('*')
+      .eq('referrer_id', user.id)
+      .order('requested_at', { ascending: false })
+      .limit(50);
+    payouts = payoutsData || [];
+
+    // Calculate stats
+    stats.totalEarningsUSD = agentProfile.total_earnings_usd || 0;
+    stats.totalEarningsXAF = agentProfile.total_earnings_xaf || 0;
+    stats.currentBalanceUSD = agentProfile.current_balance_usd || 0;
+    stats.currentBalanceXAF = agentProfile.current_balance_xaf || 0;
+    stats.totalReferrals = referrals.length;
+
+    // Calculate conversion rate
+    const convertedReferrals = referrals.filter(r => r.converted_at !== null).length;
+    stats.conversionRate = referrals.length > 0
+      ? Math.round((convertedReferrals / referrals.length) * 100)
+      : 0;
+  }
+} catch (err) {
+  console.error('Referral dashboard error:', err);
 }
 
-function formatCurrency(amount: number) {
-  return `$${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+// Helper functions
+function formatCurrency(amount: number, currency: string) {
+  if (currency === 'XAF') {
+    return `${amount.toLocaleString()} XAF`;
+  }
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
 }
+
+function formatDate(date: string) {
+  return new Date(date).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  });
+}
+
+function maskEmail(email: string) {
+  const [local, domain] = email.split('@');
+  const maskedLocal = local.substring(0, 2) + '***';
+  return `${maskedLocal}@${domain}`;
+}
+
+const referralLink = agentProfile ? `https://eventunestudios.com/?ref=${agentProfile.referral_code}` : '';
+
+// Minimum payout thresholds
+const MIN_PAYOUT_USD = 10;
+const MIN_PAYOUT_XAF = 5000;
+
+const canRequestPayoutUSD = stats.currentBalanceUSD >= MIN_PAYOUT_USD;
+const canRequestPayoutXAF = stats.currentBalanceXAF >= MIN_PAYOUT_XAF;
 ---
 
 <DashboardLayout title="Referrals" activeNav="referrals">
   {!isAgent ? (
-    <div class="max-w-2xl mx-auto text-center py-12">
-      <div class="mb-8 flex justify-center">
-        <div class="w-20 h-20 rounded-full bg-accent-gold/10 flex items-center justify-center text-accent-gold border border-accent-gold/20">
-          <svg width="40" height="40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-          </svg>
-        </div>
+    <!-- Not an Agent - Join Program -->
+    <div class="join-program-container">
+      <div class="join-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+        </svg>
       </div>
-      <h2 class="text-3xl font-playfair text-studio-cream mb-4">Join our Partner Program</h2>
-      <p class="text-text-muted mb-8 text-lg">Earn commissions by referring musicians to Eventune Studios. Get your unique link and start earning today.</p>
-      <Button variant="primary" id="join-btn" size="lg">
-        <span class="flex items-center gap-2">
+      <h2 class="join-title">Join Our Affiliate Program</h2>
+      <p class="join-desc">
+        Earn commissions by sharing Eventune Studios with your network. Get your unique referral link and start earning today.
+      </p>
+      <button id="join-btn" class="join-btn">
+        <span class="join-btn-content">
           Join Now
-          <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+            <polyline points="12 5 19 12 12 19"></polyline>
           </svg>
         </span>
-      </Button>
+      </button>
+      <a href="/become-affiliate" class="learn-more-link">Learn more about the program</a>
     </div>
   ) : (
-    <div class="space-y-8">
-      <!-- Stats -->
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div class="bg-studio-card border border-gold/10 rounded-lg p-6">
-          <p class="text-sm text-text-muted mb-1 uppercase tracking-wider">Total Earnings</p>
-          <p class="text-3xl font-playfair text-accent-gold">{formatCurrency(profile.total_earnings)}</p>
+    <!-- Agent Dashboard -->
+    <div class="referral-dashboard">
+      <!-- Tabs -->
+      <div class="tabs-container">
+        <nav class="tabs-nav">
+          <button class="tab-btn active" data-tab="overview">Overview</button>
+          <button class="tab-btn" data-tab="referrals">Referrals</button>
+          <button class="tab-btn" data-tab="commissions">Commissions</button>
+          <button class="tab-btn" data-tab="payouts">Payouts</button>
+          <button class="tab-btn" data-tab="settings">Settings</button>
+        </nav>
+      </div>
+
+      <!-- Overview Tab -->
+      <div class="tab-content active" data-tab-content="overview">
+        <!-- Stats Grid -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">Total Earnings (USD)</div>
+            <div class="stat-value gold-text">{formatCurrency(stats.totalEarningsUSD, 'USD')}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Total Earnings (XAF)</div>
+            <div class="stat-value gold-text">{formatCurrency(stats.totalEarningsXAF, 'XAF')}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Current Balance (USD)</div>
+            <div class="stat-value">{formatCurrency(stats.currentBalanceUSD, 'USD')}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Current Balance (XAF)</div>
+            <div class="stat-value">{formatCurrency(stats.currentBalanceXAF, 'XAF')}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Total Referrals</div>
+            <div class="stat-value">{stats.totalReferrals}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Conversion Rate</div>
+            <div class="stat-value">{stats.conversionRate}%</div>
+          </div>
         </div>
-        <div class="bg-studio-card border border-gold/10 rounded-lg p-6">
-          <p class="text-sm text-text-muted mb-1 uppercase tracking-wider">Current Balance</p>
-          <p class="text-3xl font-playfair text-studio-cream">{formatCurrency(profile.current_balance)}</p>
+
+        <!-- Referral Link Card -->
+        <div class="link-card">
+          <h3 class="link-title">Your Referral Link</h3>
+          <div class="link-input-group">
+            <input
+              type="text"
+              readonly
+              value={referralLink}
+              class="link-input"
+              id="referral-link"
+            />
+            <button class="copy-btn" id="copy-btn">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+              Copy
+            </button>
+          </div>
+          <p class="link-help">Share this link with potential customers. You'll earn commissions on their purchases.</p>
         </div>
-        <div class="bg-studio-card border border-gold/10 rounded-lg p-6">
-          <p class="text-sm text-text-muted mb-1 uppercase tracking-wider">Total Referrals</p>
-          <p class="text-3xl font-playfair text-studio-cream">{referrals.length}</p>
+
+        <!-- QR Code Card -->
+        <div class="qr-card">
+          <h3 class="qr-title">QR Code</h3>
+          <div class="qr-code-container">
+            <div id="qr-code" class="qr-code"></div>
+          </div>
+          <button class="download-qr-btn" id="download-qr-btn">Download QR Code</button>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="actions-grid">
+          <button class="action-btn" id="quick-payout-btn" disabled={!canRequestPayoutUSD && !canRequestPayoutXAF}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="1" x2="12" y2="23"></line>
+              <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+            </svg>
+            Request Payout
+          </button>
+          <button class="action-btn secondary" id="share-link-btn">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="18" cy="5" r="3"></circle>
+              <circle cx="6" cy="12" r="3"></circle>
+              <circle cx="18" cy="19" r="3"></circle>
+              <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+              <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+            </svg>
+            Share Link
+          </button>
         </div>
       </div>
 
-      <!-- Link -->
-      <div class="bg-studio-card p-6 rounded-lg border border-gold/10">
-        <h3 class="text-lg font-medium text-studio-cream mb-4">Your Referral Link</h3>
-        <div class="flex gap-2">
-          <input 
-            type="text" 
-            readonly 
-            value={`https://eventune.com?ref=${profile.referral_code}`} 
-            class="flex-1 bg-black/30 border border-gold/20 rounded px-4 py-3 text-text-muted font-mono text-sm focus:outline-none focus:border-gold/50 transition-colors"
-            id="referral-link"
-          />
-          <Button variant="secondary" id="copy-btn">Copy Link</Button>
+      <!-- Referrals Tab -->
+      <div class="tab-content" data-tab-content="referrals">
+        <div class="section-header">
+          <h3 class="section-title">Referred Customers</h3>
+          <p class="section-count">{referrals.length} total</p>
         </div>
-        <p class="text-xs text-text-muted mt-2">Share this link with musicians. You'll earn commissions when they make a purchase.</p>
-      </div>
 
-      <!-- Referrals Table -->
-      <div class="bg-studio-card border border-gold/10 rounded-lg overflow-hidden">
-        <div class="p-6 border-b border-gold/10 flex justify-between items-center">
-          <h3 class="text-lg font-medium text-studio-cream">Your Referrals</h3>
-        </div>
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm text-left">
-            <thead class="text-xs text-text-muted uppercase bg-black/20">
-              <tr>
-                <th class="px-6 py-3">Date</th>
-                <th class="px-6 py-3">Status</th>
-                <th class="px-6 py-3">Expires</th>
-              </tr>
-            </thead>
-            <tbody>
-              {referrals.length === 0 ? (
+        <div class="table-wrapper">
+          {referrals.length === 0 ? (
+            <div class="empty-state-small">
+              <p>No referrals yet. Share your link to get started!</p>
+            </div>
+          ) : (
+            <table class="data-table">
+              <thead>
                 <tr>
-                  <td colspan="3" class="px-6 py-12 text-center text-text-muted">
-                    <p class="mb-2">No referrals yet.</p>
-                    <p class="text-xs">Share your link to get started!</p>
-                  </td>
+                  <th>Customer</th>
+                  <th>Date</th>
+                  <th>Status</th>
+                  <th>Orders</th>
                 </tr>
-              ) : (
-                referrals.map((ref) => (
-                  <tr class="border-b border-gold/5 hover:bg-gold/5 transition-colors">
-                    <td class="px-6 py-4 text-text-muted">
-                      {new Date(ref.attributed_at).toLocaleDateString()}
-                    </td>
-                    <td class="px-6 py-4">
-                      <span class="px-2 py-1 rounded-full text-xs font-medium bg-status-success/10 text-status-success uppercase tracking-wide">
-                        {ref.status}
+              </thead>
+              <tbody>
+                {referrals.map((ref) => (
+                  <tr>
+                    <td>{ref.profiles ? maskEmail(ref.profiles.email) : 'N/A'}</td>
+                    <td>{formatDate(ref.attributed_at)}</td>
+                    <td>
+                      <span class={`status-pill ${ref.status}`}>
+                        {ref.converted_at ? 'Converted' : 'Pending'}
                       </span>
                     </td>
-                    <td class="px-6 py-4 text-text-muted">
-                      {ref.expires_at ? new Date(ref.expires_at).toLocaleDateString() : 'Lifetime'}
-                    </td>
+                    <td>{ref.converted_at ? '1+' : '0'}</td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
+      </div>
+
+      <!-- Commissions Tab -->
+      <div class="tab-content" data-tab-content="commissions">
+        <div class="section-header">
+          <h3 class="section-title">Commission History</h3>
+          <div class="filters">
+            <select id="status-filter" class="filter-select">
+              <option value="all">All Statuses</option>
+              <option value="pending">Pending</option>
+              <option value="approved">Approved</option>
+              <option value="paid">Paid</option>
+              <option value="rejected">Rejected</option>
+            </select>
+            <select id="currency-filter" class="filter-select">
+              <option value="all">All Currencies</option>
+              <option value="USD">USD</option>
+              <option value="XAF">XAF</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="table-wrapper">
+          {commissions.length === 0 ? (
+            <div class="empty-state-small">
+              <p>No commissions yet. Commissions will appear here once your referrals make purchases.</p>
+            </div>
+          ) : (
+            <table class="data-table" id="commissions-table">
+              <thead>
+                <tr>
+                  <th>Order #</th>
+                  <th>Amount</th>
+                  <th>Currency</th>
+                  <th>Rate</th>
+                  <th>Level</th>
+                  <th>Status</th>
+                  <th>Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {commissions.map((comm) => (
+                  <tr data-status={comm.status} data-currency={comm.currency}>
+                    <td class="mono-text">{comm.orders?.order_number || 'N/A'}</td>
+                    <td class="amount-text">{formatCurrency(comm.amount, comm.currency)}</td>
+                    <td>{comm.currency}</td>
+                    <td>{comm.rate_snapshot}{comm.rate_type_snapshot === 'percentage' ? '%' : ''}</td>
+                    <td>Level {comm.level}</td>
+                    <td>
+                      <span class={`status-pill ${comm.status}`}>{comm.status}</span>
+                    </td>
+                    <td>{formatDate(comm.earned_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+
+      <!-- Payouts Tab -->
+      <div class="tab-content" data-tab-content="payouts">
+        <div class="section-header">
+          <h3 class="section-title">Payout Management</h3>
+        </div>
+
+        <!-- Current Balance Card -->
+        <div class="balance-card">
+          <div class="balance-row">
+            <div class="balance-label">Available Balance (USD)</div>
+            <div class="balance-value">{formatCurrency(stats.currentBalanceUSD, 'USD')}</div>
+          </div>
+          <div class="balance-row">
+            <div class="balance-label">Available Balance (XAF)</div>
+            <div class="balance-value">{formatCurrency(stats.currentBalanceXAF, 'XAF')}</div>
+          </div>
+          <div class="balance-info">
+            Minimum payout: ${MIN_PAYOUT_USD} USD / {MIN_PAYOUT_XAF.toLocaleString()} XAF
+          </div>
+          <button
+            class="request-payout-btn"
+            id="request-payout-btn"
+            disabled={!canRequestPayoutUSD && !canRequestPayoutXAF}
+          >
+            Request Payout
+          </button>
+        </div>
+
+        <!-- Payout History -->
+        <div class="payout-history">
+          <h4 class="history-title">Payout History</h4>
+          {payouts.length === 0 ? (
+            <div class="empty-state-small">
+              <p>No payout requests yet.</p>
+            </div>
+          ) : (
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Amount</th>
+                  <th>Currency</th>
+                  <th>Status</th>
+                  <th>Requested</th>
+                  <th>Processed</th>
+                </tr>
+              </thead>
+              <tbody>
+                {payouts.map((payout) => (
+                  <tr>
+                    <td class="amount-text">{formatCurrency(payout.amount, payout.currency)}</td>
+                    <td>{payout.currency}</td>
+                    <td>
+                      <span class={`status-pill ${payout.status}`}>{payout.status}</span>
+                    </td>
+                    <td>{formatDate(payout.requested_at)}</td>
+                    <td>{payout.processed_at ? formatDate(payout.processed_at) : '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+
+      <!-- Settings Tab -->
+      <div class="tab-content" data-tab-content="settings">
+        <div class="section-header">
+          <h3 class="section-title">Payout Settings</h3>
+        </div>
+
+        <form class="settings-form" id="payout-settings-form">
+          <div class="form-group">
+            <label class="form-label">Payout Method</label>
+            <select class="form-select" id="payout-method" name="payout_method">
+              <option value="">Select method...</option>
+              <option value="mobile_money" selected={agentProfile?.payout_method === 'mobile_money'}>Mobile Money</option>
+              <option value="bank_transfer" selected={agentProfile?.payout_method === 'bank_transfer'}>Bank Transfer</option>
+              <option value="paypal" selected={agentProfile?.payout_method === 'paypal'}>PayPal</option>
+            </select>
+          </div>
+
+          <!-- Mobile Money Fields -->
+          <div class="payout-method-fields" id="mobile-money-fields" style="display: none;">
+            <div class="form-group">
+              <label class="form-label">Phone Number</label>
+              <input
+                type="tel"
+                class="form-input"
+                name="phone_number"
+                placeholder="+237 6XX XXX XXX"
+                value={agentProfile?.payout_details?.phone_number || ''}
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Operator</label>
+              <select class="form-select" name="operator">
+                <option value="">Select operator...</option>
+                <option value="mtn" selected={agentProfile?.payout_details?.operator === 'mtn'}>MTN</option>
+                <option value="orange" selected={agentProfile?.payout_details?.operator === 'orange'}>Orange</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Bank Transfer Fields -->
+          <div class="payout-method-fields" id="bank-transfer-fields" style="display: none;">
+            <div class="form-group">
+              <label class="form-label">Bank Name</label>
+              <input
+                type="text"
+                class="form-input"
+                name="bank_name"
+                placeholder="e.g., Afriland First Bank"
+                value={agentProfile?.payout_details?.bank_name || ''}
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Account Number</label>
+              <input
+                type="text"
+                class="form-input"
+                name="account_number"
+                placeholder="XXXXXXXXXXXXXXX"
+                value={agentProfile?.payout_details?.account_number || ''}
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Account Name</label>
+              <input
+                type="text"
+                class="form-input"
+                name="account_name"
+                placeholder="Full name as on account"
+                value={agentProfile?.payout_details?.account_name || ''}
+              />
+            </div>
+          </div>
+
+          <!-- PayPal Fields -->
+          <div class="payout-method-fields" id="paypal-fields" style="display: none;">
+            <div class="form-group">
+              <label class="form-label">PayPal Email</label>
+              <input
+                type="email"
+                class="form-input"
+                name="paypal_email"
+                placeholder="your@email.com"
+                value={agentProfile?.payout_details?.paypal_email || ''}
+              />
+            </div>
+          </div>
+
+          <button type="submit" class="save-settings-btn">
+            Save Settings
+          </button>
+        </form>
       </div>
     </div>
   )}
+
+  <!-- Payout Request Modal -->
+  <div class="modal" id="payout-modal">
+    <div class="modal-overlay"></div>
+    <div class="modal-content">
+      <h3 class="modal-title">Request Payout</h3>
+      <form id="payout-request-form">
+        <div class="form-group">
+          <label class="form-label">Currency</label>
+          <select class="form-select" name="currency" id="payout-currency" required>
+            <option value="">Select currency...</option>
+            {canRequestPayoutUSD && <option value="USD">USD ({formatCurrency(stats.currentBalanceUSD, 'USD')} available)</option>}
+            {canRequestPayoutXAF && <option value="XAF">XAF ({formatCurrency(stats.currentBalanceXAF, 'XAF')} available)</option>}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Amount</label>
+          <input
+            type="number"
+            class="form-input"
+            name="amount"
+            id="payout-amount"
+            step="0.01"
+            min="0"
+            required
+          />
+          <p class="form-help" id="payout-help"></p>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="modal-btn secondary" id="cancel-payout-btn">Cancel</button>
+          <button type="submit" class="modal-btn primary">Submit Request</button>
+        </div>
+      </form>
+    </div>
+  </div>
 </DashboardLayout>
 
+<style>
+  :root {
+    --studio-black: #0A0A0A;
+    --studio-card: #141414;
+    --studio-cream: #F5F5F5;
+    --gold: #D4AF37;
+    --gold-dark: #B8962E;
+  }
+
+  /* Join Program Container */
+  .join-program-container {
+    max-width: 32rem;
+    margin: 0 auto;
+    text-align: center;
+    padding: 3rem 1rem;
+  }
+
+  .join-icon {
+    width: 5rem;
+    height: 5rem;
+    margin: 0 auto 1.5rem;
+    background: rgba(212, 175, 55, 0.1);
+    border: 1px solid rgba(212, 175, 55, 0.2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--gold);
+  }
+
+  .join-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.875rem;
+    font-weight: 600;
+    color: var(--studio-cream);
+    margin: 0 0 1rem 0;
+  }
+
+  .join-desc {
+    font-size: 1rem;
+    color: rgba(245, 245, 245, 0.6);
+    margin: 0 0 2rem 0;
+    line-height: 1.6;
+  }
+
+  .join-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.875rem 2rem;
+    background: var(--gold);
+    color: var(--studio-black);
+    font-size: 1rem;
+    font-weight: 600;
+    border: none;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .join-btn:hover:not(:disabled) {
+    background: var(--gold-dark);
+    box-shadow: 0 4px 12px rgba(212, 175, 55, 0.3);
+  }
+
+  .join-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .join-btn-content {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .learn-more-link {
+    display: inline-block;
+    margin-top: 1rem;
+    color: rgba(212, 175, 55, 0.7);
+    text-decoration: none;
+    font-size: 0.875rem;
+    transition: color 0.2s;
+  }
+
+  .learn-more-link:hover {
+    color: var(--gold);
+  }
+
+  /* Tabs */
+  .tabs-container {
+    margin-bottom: 2rem;
+    border-bottom: 1px solid rgba(212, 175, 55, 0.1);
+  }
+
+  .tabs-nav {
+    display: flex;
+    gap: 0.5rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .tab-btn {
+    padding: 0.75rem 1.25rem;
+    background: none;
+    border: none;
+    color: rgba(245, 245, 245, 0.5);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  .tab-btn:hover {
+    color: var(--studio-cream);
+  }
+
+  .tab-btn.active {
+    color: var(--gold);
+    border-bottom-color: var(--gold);
+  }
+
+  .tab-content {
+    display: none;
+  }
+
+  .tab-content.active {
+    display: block;
+  }
+
+  /* Stats Grid */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+
+  @media (min-width: 768px) {
+    .stats-grid {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .stats-grid {
+      grid-template-columns: repeat(6, 1fr);
+    }
+  }
+
+  .stat-card {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 0.75rem;
+    padding: 1.25rem;
+  }
+
+  .stat-label {
+    font-size: 0.625rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: rgba(245, 245, 245, 0.4);
+    margin-bottom: 0.5rem;
+  }
+
+  .stat-value {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--studio-cream);
+  }
+
+  .gold-text {
+    color: var(--gold);
+  }
+
+  /* Link Card */
+  .link-card {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(212, 175, 55, 0.1);
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .link-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--studio-cream);
+    margin: 0 0 1rem 0;
+  }
+
+  .link-input-group {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .link-input {
+    flex: 1;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(212, 175, 55, 0.2);
+    border-radius: 0.5rem;
+    padding: 0.75rem 1rem;
+    color: rgba(245, 245, 245, 0.6);
+    font-family: monospace;
+    font-size: 0.875rem;
+  }
+
+  .copy-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.25rem;
+    background: var(--gold);
+    color: var(--studio-black);
+    border: none;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  .copy-btn:hover {
+    background: var(--gold-dark);
+  }
+
+  .copy-btn.copied {
+    background: rgba(16, 185, 129, 0.2);
+    color: #34D399;
+  }
+
+  .link-help {
+    font-size: 0.75rem;
+    color: rgba(245, 245, 245, 0.4);
+    margin: 0.5rem 0 0 0;
+  }
+
+  /* QR Card */
+  .qr-card {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(212, 175, 55, 0.1);
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    text-align: center;
+  }
+
+  .qr-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--studio-cream);
+    margin: 0 0 1rem 0;
+  }
+
+  .qr-code-container {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 1rem;
+  }
+
+  .qr-code {
+    width: 200px;
+    height: 200px;
+    background: white;
+    border-radius: 0.5rem;
+    padding: 1rem;
+  }
+
+  .download-qr-btn {
+    padding: 0.625rem 1.25rem;
+    background: rgba(212, 175, 55, 0.1);
+    color: var(--gold);
+    border: 1px solid rgba(212, 175, 55, 0.2);
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .download-qr-btn:hover {
+    background: rgba(212, 175, 55, 0.2);
+  }
+
+  /* Actions Grid */
+  .actions-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+  }
+
+  .action-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 1rem;
+    background: var(--gold);
+    color: var(--studio-black);
+    border: none;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .action-btn:hover:not(:disabled) {
+    background: var(--gold-dark);
+  }
+
+  .action-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .action-btn.secondary {
+    background: rgba(212, 175, 55, 0.1);
+    color: var(--gold);
+    border: 1px solid rgba(212, 175, 55, 0.2);
+  }
+
+  .action-btn.secondary:hover {
+    background: rgba(212, 175, 55, 0.2);
+  }
+
+  /* Section Header */
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .section-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--studio-cream);
+    margin: 0;
+  }
+
+  .section-count {
+    font-size: 0.875rem;
+    color: rgba(245, 245, 245, 0.4);
+    margin: 0;
+  }
+
+  .filters {
+    display: flex;
+    gap: 0.75rem;
+  }
+
+  .filter-select {
+    background: var(--studio-card);
+    border: 1px solid rgba(212, 175, 55, 0.2);
+    color: var(--studio-cream);
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    cursor: pointer;
+  }
+
+  /* Table */
+  .table-wrapper {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(212, 175, 55, 0.1);
+    border-radius: 0.75rem;
+    overflow: hidden;
+  }
+
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .data-table thead {
+    background: var(--studio-card);
+    border-bottom: 1px solid rgba(212, 175, 55, 0.1);
+  }
+
+  .data-table th {
+    text-align: left;
+    padding: 1rem 1.25rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: rgba(245, 245, 245, 0.5);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .data-table td {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid rgba(212, 175, 55, 0.05);
+    color: rgba(245, 245, 245, 0.8);
+    font-size: 0.875rem;
+  }
+
+  .data-table tbody tr:hover {
+    background: rgba(212, 175, 55, 0.03);
+  }
+
+  .mono-text {
+    font-family: monospace;
+    color: rgba(212, 175, 55, 0.7);
+  }
+
+  .amount-text {
+    font-weight: 600;
+    color: var(--studio-cream);
+  }
+
+  .status-pill {
+    display: inline-block;
+    padding: 0.25rem 0.625rem;
+    border-radius: 9999px;
+    font-size: 0.625rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .status-pill.pending {
+    background: rgba(245, 158, 11, 0.1);
+    color: #FBBF24;
+  }
+
+  .status-pill.approved {
+    background: rgba(59, 130, 246, 0.1);
+    color: #60A5FA;
+  }
+
+  .status-pill.paid {
+    background: rgba(16, 185, 129, 0.1);
+    color: #34D399;
+  }
+
+  .status-pill.rejected {
+    background: rgba(239, 68, 68, 0.1);
+    color: #F87171;
+  }
+
+  .status-pill.active {
+    background: rgba(16, 185, 129, 0.1);
+    color: #34D399;
+  }
+
+  .empty-state-small {
+    padding: 3rem 1.5rem;
+    text-align: center;
+    color: rgba(245, 245, 245, 0.4);
+    font-size: 0.875rem;
+  }
+
+  /* Balance Card */
+  .balance-card {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(212, 175, 55, 0.1);
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+  }
+
+  .balance-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid rgba(212, 175, 55, 0.05);
+  }
+
+  .balance-row:last-of-type {
+    border-bottom: none;
+  }
+
+  .balance-label {
+    font-size: 0.875rem;
+    color: rgba(245, 245, 245, 0.6);
+  }
+
+  .balance-value {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--gold);
+  }
+
+  .balance-info {
+    font-size: 0.75rem;
+    color: rgba(245, 245, 245, 0.4);
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid rgba(212, 175, 55, 0.05);
+  }
+
+  .request-payout-btn {
+    width: 100%;
+    margin-top: 1rem;
+    padding: 0.875rem;
+    background: var(--gold);
+    color: var(--studio-black);
+    border: none;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .request-payout-btn:hover:not(:disabled) {
+    background: var(--gold-dark);
+  }
+
+  .request-payout-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  /* Payout History */
+  .payout-history {
+    margin-top: 2rem;
+  }
+
+  .history-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--studio-cream);
+    margin: 0 0 1rem 0;
+  }
+
+  /* Settings Form */
+  .settings-form {
+    max-width: 36rem;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(212, 175, 55, 0.1);
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+  }
+
+  .form-group {
+    margin-bottom: 1.25rem;
+  }
+
+  .form-label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: rgba(245, 245, 245, 0.8);
+    margin-bottom: 0.5rem;
+  }
+
+  .form-input,
+  .form-select {
+    width: 100%;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(212, 175, 55, 0.2);
+    border-radius: 0.5rem;
+    padding: 0.75rem 1rem;
+    color: var(--studio-cream);
+    font-size: 0.875rem;
+    transition: border-color 0.2s;
+  }
+
+  .form-input:focus,
+  .form-select:focus {
+    outline: none;
+    border-color: rgba(212, 175, 55, 0.5);
+  }
+
+  .form-help {
+    font-size: 0.75rem;
+    color: rgba(245, 245, 245, 0.4);
+    margin: 0.5rem 0 0 0;
+  }
+
+  .save-settings-btn {
+    width: 100%;
+    padding: 0.875rem;
+    background: var(--gold);
+    color: var(--studio-black);
+    border: none;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .save-settings-btn:hover {
+    background: var(--gold-dark);
+  }
+
+  .payout-method-fields {
+    margin-top: 1rem;
+  }
+
+  /* Modal */
+  .modal {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+  }
+
+  .modal.active {
+    display: flex;
+  }
+
+  .modal-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(4px);
+  }
+
+  .modal-content {
+    position: relative;
+    background: var(--studio-card);
+    border: 1px solid rgba(212, 175, 55, 0.2);
+    border-radius: 0.75rem;
+    padding: 2rem;
+    max-width: 28rem;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+
+  .modal-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--studio-cream);
+    margin: 0 0 1.5rem 0;
+  }
+
+  .modal-actions {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+  }
+
+  .modal-btn {
+    flex: 1;
+    padding: 0.75rem;
+    border: none;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .modal-btn.primary {
+    background: var(--gold);
+    color: var(--studio-black);
+  }
+
+  .modal-btn.primary:hover {
+    background: var(--gold-dark);
+  }
+
+  .modal-btn.secondary {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--studio-cream);
+  }
+
+  .modal-btn.secondary:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+</style>
+
 <script>
-  const joinBtn = document.getElementById('join-btn');
+  // Tab switching
+  const tabBtns = document.querySelectorAll('.tab-btn');
+  const tabContents = document.querySelectorAll('.tab-content');
+
+  function switchTab(tabName: string) {
+    tabBtns.forEach(btn => btn.classList.remove('active'));
+    tabContents.forEach(content => content.classList.remove('active'));
+
+    const activeBtn = document.querySelector(`.tab-btn[data-tab="${tabName}"]`);
+    const activeContent = document.querySelector(`.tab-content[data-tab-content="${tabName}"]`);
+
+    activeBtn?.classList.add('active');
+    activeContent?.classList.add('active');
+
+    // Update URL hash
+    window.location.hash = tabName;
+  }
+
+  tabBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tabName = btn.getAttribute('data-tab');
+      if (tabName) switchTab(tabName);
+    });
+  });
+
+  // Load tab from URL hash
+  const hash = window.location.hash.slice(1);
+  if (hash && ['overview', 'referrals', 'commissions', 'payouts', 'settings'].includes(hash)) {
+    switchTab(hash);
+  }
+
+  // Copy link functionality
   const copyBtn = document.getElementById('copy-btn');
   const linkInput = document.getElementById('referral-link') as HTMLInputElement;
 
-  if (joinBtn) {
-    joinBtn.addEventListener('click', async () => {
-      const originalText = joinBtn.innerHTML;
-      joinBtn.innerHTML = 'Joining...';
-      (joinBtn as HTMLButtonElement).disabled = true;
-      
+  copyBtn?.addEventListener('click', () => {
+    linkInput?.select();
+    navigator.clipboard.writeText(linkInput.value);
+
+    copyBtn.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="20 6 9 17 4 12"></polyline>
+      </svg>
+      Copied!
+    `;
+    copyBtn.classList.add('copied');
+
+    setTimeout(() => {
+      copyBtn.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+        </svg>
+        Copy
+      `;
+      copyBtn.classList.remove('copied');
+    }, 2000);
+  });
+
+  // QR Code generation using QRCode.js CDN
+  const qrCodeDiv = document.getElementById('qr-code');
+  if (qrCodeDiv) {
+    const referralLink = (linkInput as HTMLInputElement)?.value;
+    if (referralLink) {
+      // Simple QR code generation - you can use a library like qrcode.js
+      // For now, using a free API service
+      const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(referralLink)}`;
+      const img = document.createElement('img');
+      img.src = qrApiUrl;
+      img.alt = 'QR Code';
+      img.style.width = '100%';
+      img.style.height = '100%';
+      qrCodeDiv.appendChild(img);
+    }
+  }
+
+  // Download QR code
+  const downloadQrBtn = document.getElementById('download-qr-btn');
+  downloadQrBtn?.addEventListener('click', () => {
+    const qrImg = qrCodeDiv?.querySelector('img') as HTMLImageElement;
+    if (qrImg) {
+      const link = document.createElement('a');
+      link.href = qrImg.src;
+      link.download = 'eventune-referral-qr.png';
+      link.click();
+    }
+  });
+
+  // Share link functionality
+  const shareLinkBtn = document.getElementById('share-link-btn');
+  shareLinkBtn?.addEventListener('click', async () => {
+    const referralLink = (linkInput as HTMLInputElement)?.value;
+    if (navigator.share) {
       try {
-        const res = await fetch('/api/referrals/join', { method: 'POST' });
-        if (res.ok) {
-          window.location.reload();
-        } else {
-          const err = await res.json();
-          alert('Error joining program: ' + (err.error || 'Unknown error'));
-          joinBtn.innerHTML = originalText;
-          (joinBtn as HTMLButtonElement).disabled = false;
-        }
-      } catch (e) {
-        console.error(e);
-        alert('Error joining program');
-        joinBtn.innerHTML = originalText;
-        (joinBtn as HTMLButtonElement).disabled = false;
+        await navigator.share({
+          title: 'Join Eventune Studios',
+          text: 'Check out Eventune Studios for personalized custom songs!',
+          url: referralLink
+        });
+      } catch (err) {
+        console.error('Share failed:', err);
       }
+    } else {
+      // Fallback: copy to clipboard
+      navigator.clipboard.writeText(referralLink);
+      alert('Link copied to clipboard!');
+    }
+  });
+
+  // Commission filters
+  const statusFilter = document.getElementById('status-filter') as HTMLSelectElement;
+  const currencyFilter = document.getElementById('currency-filter') as HTMLSelectElement;
+  const commissionsTable = document.getElementById('commissions-table');
+
+  function filterCommissions() {
+    const status = statusFilter?.value;
+    const currency = currencyFilter?.value;
+    const rows = commissionsTable?.querySelectorAll('tbody tr');
+
+    rows?.forEach((row: Element) => {
+      const htmlRow = row as HTMLElement;
+      const rowStatus = htmlRow.dataset.status;
+      const rowCurrency = htmlRow.dataset.currency;
+
+      const statusMatch = status === 'all' || rowStatus === status;
+      const currencyMatch = currency === 'all' || rowCurrency === currency;
+
+      htmlRow.style.display = statusMatch && currencyMatch ? '' : 'none';
     });
   }
 
-  if (copyBtn && linkInput) {
-    copyBtn.addEventListener('click', () => {
-      linkInput.select();
-      navigator.clipboard.writeText(linkInput.value);
-      const originalText = copyBtn.textContent;
-      copyBtn.textContent = 'Copied!';
-      copyBtn.classList.add('bg-status-success/20', 'text-status-success');
-      
-      setTimeout(() => {
-        copyBtn.textContent = originalText;
-        copyBtn.classList.remove('bg-status-success/20', 'text-status-success');
-      }, 2000);
-    });
+  statusFilter?.addEventListener('change', filterCommissions);
+  currencyFilter?.addEventListener('change', filterCommissions);
+
+  // Payout method selector
+  const payoutMethodSelect = document.getElementById('payout-method') as HTMLSelectElement;
+  const mobileMoneyFields = document.getElementById('mobile-money-fields');
+  const bankTransferFields = document.getElementById('bank-transfer-fields');
+  const paypalFields = document.getElementById('paypal-fields');
+
+  function updatePayoutFields() {
+    const method = payoutMethodSelect?.value;
+
+    mobileMoneyFields!.style.display = 'none';
+    bankTransferFields!.style.display = 'none';
+    paypalFields!.style.display = 'none';
+
+    if (method === 'mobile_money') {
+      mobileMoneyFields!.style.display = 'block';
+    } else if (method === 'bank_transfer') {
+      bankTransferFields!.style.display = 'block';
+    } else if (method === 'paypal') {
+      paypalFields!.style.display = 'block';
+    }
   }
+
+  payoutMethodSelect?.addEventListener('change', updatePayoutFields);
+  // Initialize on load
+  if (payoutMethodSelect?.value) {
+    updatePayoutFields();
+  }
+
+  // Save payout settings
+  const payoutSettingsForm = document.getElementById('payout-settings-form');
+  payoutSettingsForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target as HTMLFormElement);
+    const method = formData.get('payout_method');
+
+    const details: Record<string, any> = {};
+
+    if (method === 'mobile_money') {
+      details.phone_number = formData.get('phone_number');
+      details.operator = formData.get('operator');
+    } else if (method === 'bank_transfer') {
+      details.bank_name = formData.get('bank_name');
+      details.account_number = formData.get('account_number');
+      details.account_name = formData.get('account_name');
+    } else if (method === 'paypal') {
+      details.paypal_email = formData.get('paypal_email');
+    }
+
+    try {
+      const res = await fetch('/api/referrals/me/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          payout_method: method,
+          payout_details: details
+        })
+      });
+
+      if (res.ok) {
+        alert('Settings saved successfully!');
+      } else {
+        const err = await res.json();
+        alert('Error saving settings: ' + (err.error || 'Unknown error'));
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error saving settings');
+    }
+  });
+
+  // Payout request modal
+  const payoutModal = document.getElementById('payout-modal');
+  const quickPayoutBtn = document.getElementById('quick-payout-btn');
+  const requestPayoutBtn = document.getElementById('request-payout-btn');
+  const cancelPayoutBtn = document.getElementById('cancel-payout-btn');
+  const payoutRequestForm = document.getElementById('payout-request-form');
+  const payoutCurrencySelect = document.getElementById('payout-currency') as HTMLSelectElement;
+  const payoutAmountInput = document.getElementById('payout-amount') as HTMLInputElement;
+  const payoutHelp = document.getElementById('payout-help');
+
+  function openPayoutModal() {
+    payoutModal?.classList.add('active');
+  }
+
+  function closePayoutModal() {
+    payoutModal?.classList.remove('active');
+  }
+
+  quickPayoutBtn?.addEventListener('click', openPayoutModal);
+  requestPayoutBtn?.addEventListener('click', openPayoutModal);
+  cancelPayoutBtn?.addEventListener('click', closePayoutModal);
+  payoutModal?.querySelector('.modal-overlay')?.addEventListener('click', closePayoutModal);
+
+  // Update payout amount limits based on currency
+  payoutCurrencySelect?.addEventListener('change', () => {
+    const currency = payoutCurrencySelect.value;
+    if (currency === 'USD') {
+      payoutAmountInput.min = '10';
+      payoutAmountInput.max = String((window as any).currentBalanceUSD || 0);
+      payoutHelp!.textContent = `Minimum: $10 USD, Maximum: $${(window as any).currentBalanceUSD || 0} USD`;
+    } else if (currency === 'XAF') {
+      payoutAmountInput.min = '5000';
+      payoutAmountInput.max = String((window as any).currentBalanceXAF || 0);
+      payoutHelp!.textContent = `Minimum: 5,000 XAF, Maximum: ${((window as any).currentBalanceXAF || 0).toLocaleString()} XAF`;
+    }
+  });
+
+  // Submit payout request
+  payoutRequestForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target as HTMLFormElement);
+    const currency = formData.get('currency');
+    const amount = parseFloat(formData.get('amount') as string);
+
+    try {
+      const res = await fetch('/api/referrals/me/payouts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currency, amount })
+      });
+
+      if (res.ok) {
+        alert('Payout request submitted successfully!');
+        closePayoutModal();
+        window.location.reload();
+      } else {
+        const err = await res.json();
+        alert('Error requesting payout: ' + (err.error || 'Unknown error'));
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error requesting payout');
+    }
+  });
+
+  // Join program
+  const joinBtn = document.getElementById('join-btn');
+  joinBtn?.addEventListener('click', async () => {
+    const originalText = joinBtn.innerHTML;
+    joinBtn.innerHTML = 'Joining...';
+    (joinBtn as HTMLButtonElement).disabled = true;
+
+    try {
+      const res = await fetch('/api/referrals/join', { method: 'POST' });
+      if (res.ok) {
+        window.location.reload();
+      } else {
+        const err = await res.json();
+        alert('Error joining program: ' + (err.error || 'Unknown error'));
+        joinBtn.innerHTML = originalText;
+        (joinBtn as HTMLButtonElement).disabled = false;
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error joining program');
+      joinBtn.innerHTML = originalText;
+      (joinBtn as HTMLButtonElement).disabled = false;
+    }
+  });
+
+  // Store balances for payout modal
+  (window as any).currentBalanceUSD = parseFloat(document.querySelector('.stat-card .stat-value')?.textContent?.replace(/[^0-9.]/g, '') || '0');
+  (window as any).currentBalanceXAF = parseFloat(document.querySelectorAll('.stat-card .stat-value')[1]?.textContent?.replace(/[^0-9.]/g, '') || '0');
 </script>

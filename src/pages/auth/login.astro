@@ -113,6 +113,10 @@ import Button from '@/components/ui/Button.astro';
 
 <script>
   import { supabase } from '@/lib/supabase/client';
+  import { initReferralTracking } from '@/lib/referral/attribution';
+
+  // Initialize referral tracking on page load (backup cookie to localStorage)
+  initReferralTracking();
 
   const form = document.getElementById('login-form') as HTMLFormElement;
   const submitBtn = document.getElementById('submit-btn') as HTMLButtonElement;

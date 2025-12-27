@@ -67,6 +67,7 @@ import Card from '@/components/ui/Card.astro';
 
 <script>
   import { supabase } from '@/lib/supabase/client';
+  import { applyReferralOnSignup } from '@/lib/referral/attribution';
 
   const loadingState = document.getElementById('loading-state');
   const successState = document.getElementById('success-state');
@@ -136,7 +137,12 @@ import Card from '@/components/ui/Card.astro';
           return;
         }
 
-        // Email confirmation - show success and redirect
+        // Email confirmation - apply referral if exists, then redirect
+        // Don't wait for referral attribution to complete (fire and forget)
+        applyReferralOnSignup().catch(err => {
+          console.warn('Referral attribution failed (non-critical):', err);
+        });
+
         showSuccess();
         setTimeout(() => {
           window.location.href = '/dashboard';
@@ -166,6 +172,11 @@ import Card from '@/components/ui/Card.astro';
         } catch (syncError) {
           console.error('Failed to sync session to cookies:', syncError);
         }
+
+        // Apply referral if exists (fire and forget)
+        applyReferralOnSignup().catch(err => {
+          console.warn('Referral attribution failed (non-critical):', err);
+        });
 
         showSuccess();
         setTimeout(() => {

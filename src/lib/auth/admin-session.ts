@@ -24,12 +24,14 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     'analytics:view', 'analytics:export',
     'content:view', 'content:update', 'content:delete',
     'settings:view', 'settings:update',
+    'referrals:view', 'referrals:manage',
     'audit:view',
   ],
   order_manager: [
     'dashboard:view',
     'orders:view', 'orders:update',
     'customers:view',
+    'referrals:view',
     'analytics:view',
   ],
   support: [

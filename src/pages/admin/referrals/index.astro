@@ -1,24 +1,71 @@
 ---
 /**
  * Referral System Dashboard
- * Overview of agents, commissions, and program performance
+ * Overview of agents, commissions, program performance, and fraud monitoring
+ *
+ * Security: Admin role with referrals:view permission required
  */
 import AdminLayout from '../../../layouts/AdminLayout.astro';
-import { getReferralStats, getRecentReferrals, getRecentCommissions } from '../../../services/admin-referral.service';
-import { getFirstName, type SessionData } from '../../../lib/auth/session';
+import { hasPermission, getPermissionsForRole } from '../../../lib/auth/admin-session';
+import type { SessionData } from '../../../lib/auth/session';
 
-// Session check
+// Get session from middleware
 const session = Astro.locals.session as SessionData;
-if (!session) return Astro.redirect('/auth/login');
+const profile = session?.profile;
+const adminRole = profile?.admin_role as 'super_admin' | 'order_manager' | 'support' | null;
+const permissions = adminRole ? getPermissionsForRole(adminRole) : [];
 
-// Fetch data
-const [stats, recentReferrals, recentCommissions] = await Promise.all([
-  getReferralStats(),
-  getRecentReferrals(5),
-  getRecentCommissions(5)
-]);
+// Verify referrals permission
+if (!hasPermission(permissions, 'referrals:view')) {
+  return Astro.redirect('/admin?error=permission_denied');
+}
 
-function formatCurrency(amount: number) {
+// Mock data - replace with actual service calls
+const stats = {
+  totalAgents: 45,
+  activeAgents: 38,
+  suspendedAgents: 7,
+  totalCommissionsUSD: 12450.50,
+  totalCommissionsXAF: 5200000,
+  pendingCommissionsUSD: 2340.00,
+  pendingCommissionsXAF: 980000,
+  totalPaidUSD: 10110.50,
+  totalPaidXAF: 4220000,
+  pendingPayouts: 12,
+  activeFraudSignals: 3,
+  totalReferrals30Days: 127,
+  commissionsByProgram: [
+    { program: 'Standard Affiliate', count: 85, totalUSD: 8500.00 },
+    { program: 'Premium Partner', count: 42, totalUSD: 3950.50 },
+  ]
+};
+
+const recentSignups = [
+  { id: '1', name: 'John Doe', email: 'john@example.com', code: 'JOHN2024', program: 'Standard', date: '2024-12-27T10:30:00Z' },
+  { id: '2', name: 'Jane Smith', email: 'jane@example.com', code: 'JANE2024', program: 'Premium', date: '2024-12-27T09:15:00Z' },
+  { id: '3', name: 'Bob Wilson', email: 'bob@example.com', code: 'BOB2024', program: 'Standard', date: '2024-12-26T16:45:00Z' },
+  { id: '4', name: 'Alice Brown', email: 'alice@example.com', code: 'ALICE2024', program: 'Standard', date: '2024-12-26T14:20:00Z' },
+  { id: '5', name: 'Charlie Davis', email: 'charlie@example.com', code: 'CHARLIE2024', program: 'Premium', date: '2024-12-26T11:00:00Z' },
+];
+
+const recentCommissions = [
+  { id: '1', orderNumber: 'EVT-2024-001234', agent: 'JOHN2024', amountUSD: 45.00, currency: 'USD', level: 1, status: 'pending', date: '2024-12-27T10:30:00Z' },
+  { id: '2', orderNumber: 'EVT-2024-001235', agent: 'JANE2024', amountXAF: 22500, currency: 'XAF', level: 1, status: 'approved', date: '2024-12-27T09:15:00Z' },
+  { id: '3', orderNumber: 'EVT-2024-001236', agent: 'BOB2024', amountUSD: 22.50, currency: 'USD', level: 2, status: 'paid', date: '2024-12-26T16:45:00Z' },
+  { id: '4', orderNumber: 'EVT-2024-001237', agent: 'ALICE2024', amountUSD: 45.00, currency: 'USD', level: 1, status: 'pending', date: '2024-12-26T14:20:00Z' },
+  { id: '5', orderNumber: 'EVT-2024-001238', agent: 'CHARLIE2024', amountXAF: 18750, currency: 'XAF', level: 1, status: 'approved', date: '2024-12-26T11:00:00Z' },
+];
+
+const recentPayouts = [
+  { id: '1', agent: 'JOHN2024', amountUSD: 450.00, currency: 'USD', method: 'PayPal', status: 'processed', requestedDate: '2024-12-25T10:00:00Z' },
+  { id: '2', agent: 'JANE2024', amountXAF: 225000, currency: 'XAF', method: 'Mobile Money', status: 'processing', requestedDate: '2024-12-26T14:30:00Z' },
+  { id: '3', agent: 'BOB2024', amountUSD: 320.00, currency: 'USD', method: 'Bank Transfer', status: 'pending', requestedDate: '2024-12-27T09:00:00Z' },
+];
+
+function formatCurrency(amount: number, currency: string) {
+  if (currency === 'XAF') {
+    return `${amount.toLocaleString()} XAF`;
+  }
   return `$${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
@@ -30,12 +77,31 @@ function formatDate(date: string) {
     minute: '2-digit',
   });
 }
+
+function formatRelativeTime(date: string) {
+  const now = new Date();
+  const then = new Date(date);
+  const diffMs = now.getTime() - then.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  return `${diffDays}d ago`;
+}
 ---
 
-<AdminLayout title="Referrals" activeNav="referrals">
+<AdminLayout title="Referrals Dashboard" activeNav="referrals">
   <div class="referral-dashboard">
-    
-    <!-- Stats Grid -->
+
+    <!-- Welcome Section -->
+    <div class="welcome-section">
+      <h2 class="welcome-title">Referral Management</h2>
+      <p class="welcome-sub">Monitor agents, commissions, and program performance</p>
+    </div>
+
+    <!-- Stats Grid - Top Row -->
     <div class="stats-grid">
       <!-- Total Agents -->
       <div class="stat-card">
@@ -46,12 +112,18 @@ function formatDate(date: string) {
         </div>
         <div class="stat-content">
           <p class="stat-value">{stats.totalAgents}</p>
-          <p class="stat-label">Active Agents</p>
+          <p class="stat-label">Total Agents</p>
+        </div>
+        <div class="stat-meta">
+          <span class="meta-item active">{stats.activeAgents} active</span>
+          {stats.suspendedAgents > 0 && (
+            <span class="meta-item suspended">{stats.suspendedAgents} suspended</span>
+          )}
         </div>
         <div class="stat-glow gold-glow"></div>
       </div>
 
-      <!-- Paid Commissions -->
+      <!-- Total Commissions -->
       <div class="stat-card">
         <div class="stat-icon emerald-icon">
           <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -59,13 +131,16 @@ function formatDate(date: string) {
           </svg>
         </div>
         <div class="stat-content">
-          <p class="stat-value emerald-text">{formatCurrency(stats.totalPaid)}</p>
-          <p class="stat-label">Paid Commissions</p>
+          <p class="stat-value emerald-text">{formatCurrency(stats.totalCommissionsUSD, 'USD')}</p>
+          <p class="stat-label">Total Commissions (USD)</p>
+        </div>
+        <div class="stat-meta">
+          <span class="meta-item">{formatCurrency(stats.totalCommissionsXAF, 'XAF')}</span>
         </div>
         <div class="stat-glow emerald-glow"></div>
       </div>
 
-      <!-- Pending Commissions -->
+      <!-- Pending Payouts -->
       <div class="stat-card">
         <div class="stat-icon amber-icon">
           <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -73,32 +148,83 @@ function formatDate(date: string) {
           </svg>
         </div>
         <div class="stat-content">
-          <p class="stat-value amber-text">{formatCurrency(stats.totalPending)}</p>
+          <p class="stat-value amber-text">{formatCurrency(stats.pendingCommissionsUSD, 'USD')}</p>
           <p class="stat-label">Pending Payouts</p>
         </div>
+        <div class="stat-meta">
+          <span class="meta-item">{stats.pendingPayouts} requests</span>
+        </div>
+        {stats.pendingPayouts > 0 && (
+          <div class="stat-alert">
+            <span class="alert-dot"></span>
+            Needs attention
+          </div>
+        )}
         <div class="stat-glow amber-glow"></div>
       </div>
 
-      <!-- Active Programs -->
+      <!-- Total Paid Out -->
       <div class="stat-card">
         <div class="stat-icon blue-icon">
           <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
         </div>
         <div class="stat-content">
-          <p class="stat-value blue-text">{stats.activePrograms}</p>
-          <p class="stat-label">Active Programs</p>
+          <p class="stat-value blue-text">{formatCurrency(stats.totalPaidUSD, 'USD')}</p>
+          <p class="stat-label">Total Paid Out</p>
+        </div>
+        <div class="stat-meta">
+          <span class="meta-item">{formatCurrency(stats.totalPaidXAF, 'XAF')}</span>
         </div>
         <div class="stat-glow blue-glow"></div>
       </div>
+    </div>
+
+    <!-- Secondary Stats Row -->
+    <div class="secondary-stats">
+      <div class="secondary-stat-card">
+        <div class="secondary-stat-left">
+          <div class="secondary-stat-icon purple-icon">
+            <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+            </svg>
+          </div>
+          <div>
+            <p class="secondary-stat-label">Referrals (Last 30 Days)</p>
+            <p class="secondary-stat-value purple-text">{stats.totalReferrals30Days}</p>
+          </div>
+        </div>
+      </div>
+
+      {stats.activeFraudSignals > 0 && (
+        <div class="secondary-stat-card alert-card">
+          <div class="secondary-stat-left">
+            <div class="secondary-stat-icon red-icon">
+              <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <div>
+              <p class="secondary-stat-label">Active Fraud Signals</p>
+              <p class="secondary-stat-value red-text">{stats.activeFraudSignals}</p>
+            </div>
+          </div>
+          <a href="/admin/referrals/fraud" class="alert-action">
+            Review
+            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            </svg>
+          </a>
+        </div>
+      )}
     </div>
 
     <!-- Quick Actions -->
     <div class="quick-actions">
       <a href="/admin/referrals/programs" class="action-btn primary">
         <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
         </svg>
         Manage Programs
       </a>
@@ -106,7 +232,7 @@ function formatDate(date: string) {
         <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
         </svg>
-        View Agents
+        View All Agents
       </a>
       <a href="/admin/referrals/commissions" class="action-btn secondary">
         <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -114,81 +240,125 @@ function formatDate(date: string) {
         </svg>
         Commissions
       </a>
+      <a href="/admin/referrals/payouts" class="action-btn secondary">
+        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+        </svg>
+        Payouts
+      </a>
+      {stats.activeFraudSignals > 0 && (
+        <a href="/admin/referrals/fraud" class="action-btn alert">
+          <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          Fraud Alerts
+        </a>
+      )}
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <!-- Recent Referrals -->
-      <section class="data-section">
+    <!-- Activity Grid -->
+    <div class="activity-grid">
+      <!-- Recent Signups -->
+      <section class="activity-section">
         <div class="section-header">
-          <h3 class="section-title">Recent Referrals</h3>
+          <h3 class="section-title">Recent Agent Signups</h3>
+          <a href="/admin/referrals/agents" class="section-link">
+            View all
+            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            </svg>
+          </a>
         </div>
-        <div class="table-wrapper">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>Referee</th>
-                <th>Referred By</th>
-                <th>Date</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentReferrals.length === 0 ? (
-                <tr><td colspan="3" class="empty-cell">No referrals yet</td></tr>
-              ) : (
-                recentReferrals.map(r => (
-                  <tr>
-                    <td>
-                      <div class="user-cell">
-                        <span class="user-name">{r.referee_name}</span>
-                        <span class="user-email">{r.referee_email}</span>
-                      </div>
-                    </td>
-                    <td>
-                      <span class="code-badge">{r.referrer_code}</span>
-                    </td>
-                    <td class="date-cell">{formatDate(r.attributed_at)}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+        <div class="activity-list">
+          {recentSignups.map(signup => (
+            <div class="activity-item">
+              <div class="activity-icon signup-icon">
+                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                </svg>
+              </div>
+              <div class="activity-content">
+                <div class="activity-main">
+                  <span class="activity-name">{signup.name}</span>
+                  <span class="activity-code">{signup.code}</span>
+                </div>
+                <div class="activity-meta">
+                  <span>{signup.program}</span>
+                  <span class="activity-time">{formatRelativeTime(signup.date)}</span>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </section>
 
       <!-- Recent Commissions -->
-      <section class="data-section">
+      <section class="activity-section">
         <div class="section-header">
           <h3 class="section-title">Recent Commissions</h3>
+          <a href="/admin/referrals/commissions" class="section-link">
+            View all
+            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            </svg>
+          </a>
         </div>
-        <div class="table-wrapper">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>Referrer</th>
-                <th>Amount</th>
-                <th>Level</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentCommissions.length === 0 ? (
-                <tr><td colspan="4" class="empty-cell">No commissions yet</td></tr>
-              ) : (
-                recentCommissions.map(c => (
-                  <tr>
-                    <td><span class="code-badge">{c.referrer_code}</span></td>
-                    <td class="amount-cell">{formatCurrency(c.amount)}</td>
-                    <td><span class="level-badge">L{c.level}</span></td>
-                    <td>
-                      <span class={`status-badge ${c.status}`}>
-                        {c.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+        <div class="activity-list">
+          {recentCommissions.map(commission => (
+            <div class="activity-item">
+              <div class={`activity-icon ${commission.status === 'paid' ? 'paid-icon' : commission.status === 'approved' ? 'approved-icon' : 'pending-icon'}`}>
+                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div class="activity-content">
+                <div class="activity-main">
+                  <span class="activity-order">{commission.orderNumber}</span>
+                  <span class="activity-code">{commission.agent}</span>
+                </div>
+                <div class="activity-meta">
+                  <span class="activity-amount">{formatCurrency(commission.amountUSD || commission.amountXAF || 0, commission.currency)}</span>
+                  <span class="activity-level">L{commission.level}</span>
+                  <span class={`activity-status ${commission.status}`}>{commission.status}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <!-- Recent Payout Requests -->
+      <section class="activity-section">
+        <div class="section-header">
+          <h3 class="section-title">Recent Payout Requests</h3>
+          <a href="/admin/referrals/payouts" class="section-link">
+            View all
+            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            </svg>
+          </a>
+        </div>
+        <div class="activity-list">
+          {recentPayouts.map(payout => (
+            <div class="activity-item">
+              <div class={`activity-icon ${payout.status === 'processed' ? 'paid-icon' : payout.status === 'processing' ? 'approved-icon' : 'pending-icon'}`}>
+                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+              </div>
+              <div class="activity-content">
+                <div class="activity-main">
+                  <span class="activity-code">{payout.agent}</span>
+                  <span class="activity-amount">{formatCurrency(payout.amountUSD || payout.amountXAF || 0, payout.currency)}</span>
+                </div>
+                <div class="activity-meta">
+                  <span>{payout.method}</span>
+                  <span class={`activity-status ${payout.status}`}>{payout.status}</span>
+                  <span class="activity-time">{formatRelativeTime(payout.requestedDate)}</span>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </section>
     </div>
@@ -208,6 +378,31 @@ function formatDate(date: string) {
     display: flex;
     flex-direction: column;
     gap: 1.5rem;
+  }
+
+  /* Welcome Section */
+  .welcome-section {
+    margin-bottom: 0.5rem;
+  }
+
+  .welcome-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.375rem;
+    font-weight: 600;
+    color: var(--admin-cream);
+    margin: 0 0 0.25rem 0;
+  }
+
+  @media (min-width: 640px) {
+    .welcome-title {
+      font-size: 1.5rem;
+    }
+  }
+
+  .welcome-sub {
+    font-size: 0.8125rem;
+    color: rgba(245, 245, 245, 0.5);
+    margin: 0;
   }
 
   /* Stats Grid */
@@ -259,6 +454,13 @@ function formatDate(date: string) {
   .emerald-icon { background: rgba(16, 185, 129, 0.1); color: #34D399; }
   .amber-icon { background: rgba(245, 158, 11, 0.1); color: #FBBF24; }
   .blue-icon { background: rgba(59, 130, 246, 0.1); color: #60A5FA; }
+  .purple-icon { background: rgba(139, 92, 246, 0.1); color: #A78BFA; }
+  .red-icon { background: rgba(239, 68, 68, 0.1); color: #F87171; }
+
+  .stat-content {
+    position: relative;
+    z-index: 1;
+  }
 
   .stat-value {
     font-family: 'Playfair Display', serif;
@@ -269,14 +471,64 @@ function formatDate(date: string) {
     margin: 0 0 0.25rem 0;
   }
 
+  @media (min-width: 640px) {
+    .stat-value {
+      font-size: 1.75rem;
+    }
+  }
+
   .emerald-text { color: #34D399; }
   .amber-text { color: #FBBF24; }
   .blue-text { color: #60A5FA; }
+  .purple-text { color: #A78BFA; }
+  .red-text { color: #F87171; }
 
   .stat-label {
     font-size: 0.75rem;
     color: rgba(245, 245, 245, 0.5);
     margin: 0;
+  }
+
+  .stat-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.625rem;
+  }
+
+  .meta-item {
+    font-size: 0.6875rem;
+    color: rgba(245, 245, 245, 0.4);
+  }
+
+  .meta-item.active {
+    color: #10b981;
+  }
+
+  .meta-item.suspended {
+    color: #f87171;
+  }
+
+  .stat-alert {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    margin-top: 0.625rem;
+    font-size: 0.6875rem;
+    color: #fbbf24;
+  }
+
+  .alert-dot {
+    width: 0.375rem;
+    height: 0.375rem;
+    background: #fbbf24;
+    border-radius: 50%;
+    animation: pulse 1.5s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
   }
 
   .stat-glow {
@@ -294,6 +546,82 @@ function formatDate(date: string) {
   .emerald-glow { background: #34D399; }
   .amber-glow { background: #FBBF24; }
   .blue-glow { background: #60A5FA; }
+
+  /* Secondary Stats */
+  .secondary-stats {
+    display: grid;
+    grid-template-columns: repeat(1, 1fr);
+    gap: 0.75rem;
+  }
+
+  @media (min-width: 1024px) {
+    .secondary-stats {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  .secondary-stat-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem;
+    background: var(--admin-card);
+    border: 1px solid rgba(212, 175, 55, 0.08);
+    border-radius: 0.75rem;
+  }
+
+  .secondary-stat-card.alert-card {
+    border-color: rgba(239, 68, 68, 0.2);
+    background: rgba(239, 68, 68, 0.05);
+  }
+
+  .secondary-stat-left {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .secondary-stat-icon {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .secondary-stat-label {
+    font-size: 0.75rem;
+    color: rgba(245, 245, 245, 0.5);
+    margin: 0 0 0.25rem 0;
+  }
+
+  .secondary-stat-value {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  .alert-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.375rem 0.75rem;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 0.5rem;
+    color: #f87171;
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: all 0.2s ease;
+  }
+
+  .alert-action:hover {
+    background: rgba(239, 68, 68, 0.15);
+  }
 
   /* Quick Actions */
   .quick-actions {
@@ -319,16 +647,45 @@ function formatDate(date: string) {
     color: var(--admin-black);
   }
 
+  .action-btn.primary:hover {
+    box-shadow: 0 4px 20px rgba(212, 175, 55, 0.3);
+  }
+
   .action-btn.secondary {
     background: rgba(212, 175, 55, 0.1);
     border: 1px solid rgba(212, 175, 55, 0.2);
     color: var(--gold);
   }
 
-  .action-btn:hover { transform: translateY(-1px); }
+  .action-btn.secondary:hover {
+    background: rgba(212, 175, 55, 0.15);
+    border-color: rgba(212, 175, 55, 0.3);
+  }
 
-  /* Data Sections */
-  .data-section {
+  .action-btn.alert {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #f87171;
+  }
+
+  .action-btn.alert:hover {
+    background: rgba(239, 68, 68, 0.15);
+  }
+
+  /* Activity Grid */
+  .activity-grid {
+    display: grid;
+    grid-template-columns: repeat(1, 1fr);
+    gap: 1rem;
+  }
+
+  @media (min-width: 1024px) {
+    .activity-grid {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+
+  .activity-section {
     background: var(--admin-card);
     border: 1px solid rgba(212, 175, 55, 0.08);
     border-radius: 0.75rem;
@@ -336,89 +693,140 @@ function formatDate(date: string) {
   }
 
   .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     padding: 1rem;
     border-bottom: 1px solid rgba(212, 175, 55, 0.08);
   }
 
   .section-title {
     font-family: 'Playfair Display', serif;
-    font-size: 1.125rem;
+    font-size: 1rem;
     font-weight: 600;
     color: var(--admin-cream);
     margin: 0;
   }
 
-  .table-wrapper {
-    overflow-x: auto;
-  }
-
-  .data-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.875rem;
-  }
-
-  .data-table th {
-    text-align: left;
-    padding: 0.75rem 1rem;
-    color: rgba(245, 245, 245, 0.4);
-    font-weight: 500;
+  .section-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
     font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    border-bottom: 1px solid rgba(212, 175, 55, 0.05);
+    color: var(--gold);
+    text-decoration: none;
+    transition: gap 0.2s ease;
   }
 
-  .data-table td {
-    padding: 0.75rem 1rem;
-    color: rgba(245, 245, 245, 0.8);
-    border-bottom: 1px solid rgba(212, 175, 55, 0.05);
+  .section-link:hover {
+    gap: 0.5rem;
   }
 
-  .data-table tr:last-child td { border-bottom: none; }
-
-  .user-cell {
+  .activity-list {
     display: flex;
     flex-direction: column;
   }
 
-  .user-name { font-weight: 500; color: var(--admin-cream); }
-  .user-email { font-size: 0.75rem; color: rgba(245, 245, 245, 0.4); }
+  .activity-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.875rem 1rem;
+    border-bottom: 1px solid rgba(212, 175, 55, 0.05);
+    transition: background 0.2s ease;
+  }
 
-  .code-badge {
-    display: inline-block;
-    padding: 0.125rem 0.375rem;
-    background: rgba(212, 175, 55, 0.1);
-    border: 1px solid rgba(212, 175, 55, 0.2);
-    border-radius: 0.25rem;
+  .activity-item:last-child {
+    border-bottom: none;
+  }
+
+  .activity-item:hover {
+    background: rgba(212, 175, 55, 0.03);
+  }
+
+  .activity-icon {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .signup-icon { background: rgba(212, 175, 55, 0.1); color: var(--gold); }
+  .paid-icon { background: rgba(16, 185, 129, 0.1); color: #34D399; }
+  .approved-icon { background: rgba(59, 130, 246, 0.1); color: #60A5FA; }
+  .pending-icon { background: rgba(245, 158, 11, 0.1); color: #FBBF24; }
+
+  .activity-content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .activity-main {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.25rem;
+    flex-wrap: wrap;
+  }
+
+  .activity-name {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--admin-cream);
+  }
+
+  .activity-order {
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.75rem;
+    color: rgba(245, 245, 245, 0.6);
+  }
+
+  .activity-code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6875rem;
+    padding: 0.125rem 0.375rem;
+    background: rgba(212, 175, 55, 0.1);
+    border-radius: 0.25rem;
     color: var(--gold);
   }
 
-  .level-badge {
-    font-size: 0.75rem;
+  .activity-meta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    font-size: 0.6875rem;
+    color: rgba(245, 245, 245, 0.4);
+  }
+
+  .activity-amount {
+    font-weight: 500;
+    color: #34D399;
+  }
+
+  .activity-level {
     color: rgba(245, 245, 245, 0.5);
   }
 
-  .status-badge {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.125rem 0.5rem;
+  .activity-status {
+    padding: 0.125rem 0.375rem;
     border-radius: 9999px;
-    font-size: 0.6875rem;
-    font-weight: 500;
+    font-size: 0.625rem;
     text-transform: uppercase;
+    font-weight: 500;
   }
 
-  .status-badge.paid { background: rgba(16, 185, 129, 0.1); color: #34D399; }
-  .status-badge.pending { background: rgba(245, 158, 11, 0.1); color: #FBBF24; }
-  .status-badge.rejected { background: rgba(239, 68, 68, 0.1); color: #F87171; }
+  .activity-status.paid { background: rgba(16, 185, 129, 0.1); color: #34D399; }
+  .activity-status.approved { background: rgba(59, 130, 246, 0.1); color: #60A5FA; }
+  .activity-status.pending { background: rgba(245, 158, 11, 0.1); color: #FBBF24; }
+  .activity-status.processing { background: rgba(139, 92, 246, 0.1); color: #A78BFA; }
+  .activity-status.processed { background: rgba(16, 185, 129, 0.1); color: #34D399; }
+  .activity-status.rejected { background: rgba(239, 68, 68, 0.1); color: #F87171; }
 
-  .empty-cell {
-    text-align: center;
-    padding: 2rem;
+  .activity-time {
     color: rgba(245, 245, 245, 0.3);
-    font-style: italic;
   }
 </style>

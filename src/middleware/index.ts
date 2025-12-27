@@ -6,6 +6,7 @@
 import { defineMiddleware, sequence } from 'astro:middleware';
 import { createServerClientWithToken } from '@/lib/supabase/server';
 import { setCSRFToken, generateCSRFToken } from '@/lib/auth/session';
+import { referralMiddleware } from './referral';
 
 // Routes that require authentication
 const protectedRoutes = [
@@ -149,4 +150,5 @@ const securityHeadersMiddleware = defineMiddleware(async (context, next) => {
 });
 
 // Combine middlewares
-export const onRequest = sequence(securityHeadersMiddleware, authMiddleware);
+// Order matters: referral tracking should happen early, before auth checks
+export const onRequest = sequence(referralMiddleware, securityHeadersMiddleware, authMiddleware);
