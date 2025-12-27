@@ -105,14 +105,41 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
 
-    // In production, you would also send an email notification here
-    // using Resend or another email service
-    // Example:
-    // await sendEmail({
-    //   to: siteConfig.contact.general,
-    //   subject: `New Contact Form Submission from ${sanitizedData.firstName}`,
-    //   text: `...`,
-    // });
+    // Send email notification to admin
+    try {
+      const { sendEmail } = await import('@/lib/email/client');
+
+      await sendEmail({
+        to: siteConfig.contact.general,
+        subject: `New Contact Form Submission from ${sanitizedData.firstName} ${sanitizedData.lastName}`,
+        html: `
+          <h2>New Contact Form Submission</h2>
+          <p><strong>From:</strong> ${sanitizedData.firstName} ${sanitizedData.lastName}</p>
+          <p><strong>Email:</strong> ${sanitizedData.email}</p>
+          ${sanitizedData.phone ? `<p><strong>Phone:</strong> ${sanitizedData.phone}</p>` : ''}
+          ${sanitizedData.occasion ? `<p><strong>Occasion:</strong> ${sanitizedData.occasion}</p>` : ''}
+          <p><strong>Message:</strong></p>
+          <p>${sanitizedData.message.replace(/\n/g, '<br>')}</p>
+        `,
+        text: `
+New Contact Form Submission
+
+From: ${sanitizedData.firstName} ${sanitizedData.lastName}
+Email: ${sanitizedData.email}
+${sanitizedData.phone ? `Phone: ${sanitizedData.phone}` : ''}
+${sanitizedData.occasion ? `Occasion: ${sanitizedData.occasion}` : ''}
+
+Message:
+${sanitizedData.message}
+        `,
+        tags: [
+          { name: 'type', value: 'contact-form' },
+        ],
+      });
+    } catch (emailError) {
+      console.error('Failed to send contact form notification email:', emailError);
+      // Don't fail the request if email fails
+    }
 
     return new Response(
       JSON.stringify({

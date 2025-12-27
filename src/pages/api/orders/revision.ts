@@ -133,6 +133,69 @@ export const POST: APIRoute = async ({ request, cookies, clientAddress }) => {
         .eq('id', orderId);
     }
 
+    // Send email notifications
+    try {
+      const { sendEmail } = await import('../../../lib/email/client');
+      const { siteConfig } = await import('../../../config');
+
+      // Get order details
+      const { data: orderData } = await supabase
+        .from('orders')
+        .select('order_number, profiles(full_name, email)')
+        .eq('id', orderId)
+        .single();
+
+      if (orderData) {
+        const profile = orderData.profiles as { full_name: string | null; email: string } | null;
+        const customerName = profile?.full_name || 'Valued Customer';
+        const customerEmail = profile?.email;
+
+        // Send confirmation email to customer
+        if (customerEmail) {
+          await sendEmail({
+            to: customerEmail,
+            subject: `Revision Request Received - ${orderData.order_number}`,
+            html: `
+              <h2>Revision Request Received</h2>
+              <p>Hi ${customerName},</p>
+              <p>We've received your revision request for order <strong>${orderData.order_number}</strong>.</p>
+              <p><strong>Your feedback:</strong></p>
+              <p style="background: #f5f5f5; padding: 16px; border-radius: 8px;">${sanitizedNotes.replace(/\n/g, '<br>')}</p>
+              <p>Our team will review your request and get back to you within 24-48 hours.</p>
+              <p>You can track your order status in your <a href="${siteConfig.url}/dashboard/orders/${orderId}">dashboard</a>.</p>
+            `,
+            text: `Revision Request Received - ${orderData.order_number}\n\nHi ${customerName},\n\nWe've received your revision request.\n\nYour feedback:\n${sanitizedNotes}\n\nOur team will review your request within 24-48 hours.\n\nTrack your order: ${siteConfig.url}/dashboard/orders/${orderId}`,
+            tags: [
+              { name: 'type', value: 'revision-confirmation' },
+              { name: 'order', value: orderData.order_number },
+            ],
+          });
+        }
+
+        // Send notification email to admin
+        await sendEmail({
+          to: siteConfig.contact.orders,
+          subject: `Revision Request - ${orderData.order_number}`,
+          html: `
+            <h2>New Revision Request</h2>
+            <p><strong>Order:</strong> ${orderData.order_number}</p>
+            <p><strong>Customer:</strong> ${customerName} (${customerEmail})</p>
+            <p><strong>Revision Notes:</strong></p>
+            <p style="background: #f5f5f5; padding: 16px; border-radius: 8px;">${sanitizedNotes.replace(/\n/g, '<br>')}</p>
+            <p><a href="${siteConfig.url}/admin/orders/${orderId}">View Order in Admin</a></p>
+          `,
+          text: `New Revision Request\n\nOrder: ${orderData.order_number}\nCustomer: ${customerName} (${customerEmail})\n\nRevision Notes:\n${sanitizedNotes}\n\nView: ${siteConfig.url}/admin/orders/${orderId}`,
+          tags: [
+            { name: 'type', value: 'revision-admin' },
+            { name: 'order', value: orderData.order_number },
+          ],
+        });
+      }
+    } catch (emailError) {
+      console.error('Failed to send revision request emails:', emailError);
+      // Don't fail the request if email fails
+    }
+
     return new Response(
       JSON.stringify({
         success: true,

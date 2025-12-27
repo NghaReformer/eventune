@@ -29,7 +29,12 @@ if (!hasPermission(permissions, 'analytics:view')) {
   return Astro.redirect('/admin?error=permission_denied');
 }
 
-// Fetch all analytics data in parallel
+// Get period from query parameter
+const urlParams = new URL(Astro.request.url).searchParams;
+const periodParam = urlParams.get('period');
+const period = ['30', '60', '90'].includes(periodParam || '') ? parseInt(periodParam!) : 30;
+
+// Fetch all analytics data in parallel with the selected period
 const [
   overview,
   packageRevenue,
@@ -43,9 +48,9 @@ const [
   getRevenueByPackage(),
   getRevenueByOccasion(),
   getOrderStatusDistribution(),
-  getExtendedTrends(30),
+  getExtendedTrends(period),
   getTopPackages(5),
-  getCustomerAcquisitionTrends(30),
+  getCustomerAcquisitionTrends(period),
 ]);
 
 // Calculate totals for charts
@@ -935,11 +940,12 @@ function formatCurrency(amount: number, currency: 'USD' | 'XAF'): string {
     });
   });
 
-  // Set active period from URL
+  // Set active period from URL on page load
   const urlParams = new URLSearchParams(window.location.search);
   const currentPeriod = urlParams.get('period') || '30';
   periodBtns.forEach(btn => {
-    if (btn.getAttribute('data-period') === currentPeriod) {
+    const btnPeriod = btn.getAttribute('data-period');
+    if (btnPeriod === currentPeriod) {
       btn.classList.add('active');
     } else {
       btn.classList.remove('active');

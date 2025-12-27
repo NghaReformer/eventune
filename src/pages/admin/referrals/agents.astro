@@ -1,0 +1,95 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Button from '../../../components/ui/Button.astro';
+import { supabase } from '../../../lib/supabase/client';
+
+// Fetch agents
+const { data: referralProfiles } = await supabase
+  .from('referral_profiles')
+  .select('*, program:referral_programs(name)')
+  .order('created_at', { ascending: false });
+
+const userIds = referralProfiles?.map(p => p.id) || [];
+const { data: userProfiles } = await supabase
+  .from('profiles')
+  .select('id, full_name, email')
+  .in('id', userIds);
+
+const agents = referralProfiles?.map(rp => ({
+  ...rp,
+  user: userProfiles?.find(up => up.id === rp.id)
+})) || [];
+
+function formatCurrency(amount: number) {
+  return `$${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+---
+
+<AdminLayout title="Agents" activeNav="referrals">
+  <div class="flex justify-between items-center mb-6">
+    <h2 class="text-xl font-semibold text-admin-cream">Referral Agents</h2>
+    <!-- <Button variant="primary">Add Agent</Button> -->
+  </div>
+
+  <div class="bg-primary-cardBlack border border-text-muted rounded-lg overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm text-left">
+        <thead class="text-xs text-text-muted uppercase bg-primary-hoverBlack border-b border-text-muted">
+          <tr>
+            <th class="px-6 py-3">Agent</th>
+            <th class="px-6 py-3">Code</th>
+            <th class="px-6 py-3">Program</th>
+            <th class="px-6 py-3">Earnings</th>
+            <th class="px-6 py-3">Balance</th>
+            <th class="px-6 py-3">Status</th>
+            <th class="px-6 py-3"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {agents.length === 0 ? (
+            <tr>
+              <td colspan="7" class="px-6 py-8 text-center text-text-muted">No agents found</td>
+            </tr>
+          ) : (
+            agents.map((agent) => (
+              <tr class="border-b border-text-muted hover:bg-primary-hoverBlack/50 transition-colors">
+                <td class="px-6 py-4">
+                  <div class="flex flex-col">
+                    <span class="font-medium text-admin-cream">{agent.user?.full_name || 'Unknown'}</span>
+                    <span class="text-xs text-text-muted">{agent.user?.email}</span>
+                  </div>
+                </td>
+                <td class="px-6 py-4">
+                  <span class="font-mono text-accent-gold bg-accent-gold/10 px-2 py-1 rounded text-xs">
+                    {agent.referral_code}
+                  </span>
+                </td>
+                <td class="px-6 py-4">
+                  <span class="text-text-primary">{agent.program?.name}</span>
+                </td>
+                <td class="px-6 py-4 text-text-primary">
+                  {formatCurrency(agent.total_earnings)}
+                </td>
+                <td class="px-6 py-4 text-text-primary">
+                  {formatCurrency(agent.current_balance)}
+                </td>
+                <td class="px-6 py-4">
+                  <span class={`px-2 py-1 rounded-full text-xs font-medium uppercase ${
+                    agent.status === 'active' ? 'bg-status-success/10 text-status-success' :
+                    agent.status === 'suspended' ? 'bg-status-error/10 text-status-error' :
+                    'bg-status-warning/10 text-status-warning'
+                  }`}>
+                    {agent.status}
+                  </span>
+                </td>
+                <td class="px-6 py-4 text-right">
+                  <Button variant="ghost" size="sm">View</Button>
+                </td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</AdminLayout>

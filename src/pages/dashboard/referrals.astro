@@ -1,0 +1,180 @@
+---
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import Button from '../../components/ui/Button.astro';
+import { supabase } from '../../lib/supabase/client';
+import { getSession } from '../../lib/auth/session';
+
+const session = await getSession(Astro.cookies);
+if (!session.success) return Astro.redirect('/auth/login');
+
+const { data: profile } = await supabase
+  .from('referral_profiles')
+  .select('*')
+  .eq('id', session.data.user.id)
+  .single();
+
+const isAgent = !!profile;
+
+// If agent, fetch referrals
+let referrals = [];
+if (isAgent) {
+  const { data } = await supabase
+    .from('referrals')
+    .select('*')
+    .eq('referrer_id', session.data.user.id)
+    .order('attributed_at', { ascending: false });
+  referrals = data || [];
+}
+
+function formatCurrency(amount: number) {
+  return `$${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+---
+
+<DashboardLayout title="Referrals" activeNav="referrals">
+  {!isAgent ? (
+    <div class="max-w-2xl mx-auto text-center py-12">
+      <div class="mb-8 flex justify-center">
+        <div class="w-20 h-20 rounded-full bg-accent-gold/10 flex items-center justify-center text-accent-gold border border-accent-gold/20">
+          <svg width="40" height="40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+          </svg>
+        </div>
+      </div>
+      <h2 class="text-3xl font-playfair text-studio-cream mb-4">Join our Partner Program</h2>
+      <p class="text-text-muted mb-8 text-lg">Earn commissions by referring musicians to Eventune Studios. Get your unique link and start earning today.</p>
+      <Button variant="primary" id="join-btn" size="lg">
+        <span class="flex items-center gap-2">
+          Join Now
+          <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+          </svg>
+        </span>
+      </Button>
+    </div>
+  ) : (
+    <div class="space-y-8">
+      <!-- Stats -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="bg-studio-card border border-gold/10 rounded-lg p-6">
+          <p class="text-sm text-text-muted mb-1 uppercase tracking-wider">Total Earnings</p>
+          <p class="text-3xl font-playfair text-accent-gold">{formatCurrency(profile.total_earnings)}</p>
+        </div>
+        <div class="bg-studio-card border border-gold/10 rounded-lg p-6">
+          <p class="text-sm text-text-muted mb-1 uppercase tracking-wider">Current Balance</p>
+          <p class="text-3xl font-playfair text-studio-cream">{formatCurrency(profile.current_balance)}</p>
+        </div>
+        <div class="bg-studio-card border border-gold/10 rounded-lg p-6">
+          <p class="text-sm text-text-muted mb-1 uppercase tracking-wider">Total Referrals</p>
+          <p class="text-3xl font-playfair text-studio-cream">{referrals.length}</p>
+        </div>
+      </div>
+
+      <!-- Link -->
+      <div class="bg-studio-card p-6 rounded-lg border border-gold/10">
+        <h3 class="text-lg font-medium text-studio-cream mb-4">Your Referral Link</h3>
+        <div class="flex gap-2">
+          <input 
+            type="text" 
+            readonly 
+            value={`https://eventune.com?ref=${profile.referral_code}`} 
+            class="flex-1 bg-black/30 border border-gold/20 rounded px-4 py-3 text-text-muted font-mono text-sm focus:outline-none focus:border-gold/50 transition-colors"
+            id="referral-link"
+          />
+          <Button variant="secondary" id="copy-btn">Copy Link</Button>
+        </div>
+        <p class="text-xs text-text-muted mt-2">Share this link with musicians. You'll earn commissions when they make a purchase.</p>
+      </div>
+
+      <!-- Referrals Table -->
+      <div class="bg-studio-card border border-gold/10 rounded-lg overflow-hidden">
+        <div class="p-6 border-b border-gold/10 flex justify-between items-center">
+          <h3 class="text-lg font-medium text-studio-cream">Your Referrals</h3>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm text-left">
+            <thead class="text-xs text-text-muted uppercase bg-black/20">
+              <tr>
+                <th class="px-6 py-3">Date</th>
+                <th class="px-6 py-3">Status</th>
+                <th class="px-6 py-3">Expires</th>
+              </tr>
+            </thead>
+            <tbody>
+              {referrals.length === 0 ? (
+                <tr>
+                  <td colspan="3" class="px-6 py-12 text-center text-text-muted">
+                    <p class="mb-2">No referrals yet.</p>
+                    <p class="text-xs">Share your link to get started!</p>
+                  </td>
+                </tr>
+              ) : (
+                referrals.map((ref) => (
+                  <tr class="border-b border-gold/5 hover:bg-gold/5 transition-colors">
+                    <td class="px-6 py-4 text-text-muted">
+                      {new Date(ref.attributed_at).toLocaleDateString()}
+                    </td>
+                    <td class="px-6 py-4">
+                      <span class="px-2 py-1 rounded-full text-xs font-medium bg-status-success/10 text-status-success uppercase tracking-wide">
+                        {ref.status}
+                      </span>
+                    </td>
+                    <td class="px-6 py-4 text-text-muted">
+                      {ref.expires_at ? new Date(ref.expires_at).toLocaleDateString() : 'Lifetime'}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  )}
+</DashboardLayout>
+
+<script>
+  const joinBtn = document.getElementById('join-btn');
+  const copyBtn = document.getElementById('copy-btn');
+  const linkInput = document.getElementById('referral-link') as HTMLInputElement;
+
+  if (joinBtn) {
+    joinBtn.addEventListener('click', async () => {
+      const originalText = joinBtn.innerHTML;
+      joinBtn.innerHTML = 'Joining...';
+      (joinBtn as HTMLButtonElement).disabled = true;
+      
+      try {
+        const res = await fetch('/api/referrals/join', { method: 'POST' });
+        if (res.ok) {
+          window.location.reload();
+        } else {
+          const err = await res.json();
+          alert('Error joining program: ' + (err.error || 'Unknown error'));
+          joinBtn.innerHTML = originalText;
+          (joinBtn as HTMLButtonElement).disabled = false;
+        }
+      } catch (e) {
+        console.error(e);
+        alert('Error joining program');
+        joinBtn.innerHTML = originalText;
+        (joinBtn as HTMLButtonElement).disabled = false;
+      }
+    });
+  }
+
+  if (copyBtn && linkInput) {
+    copyBtn.addEventListener('click', () => {
+      linkInput.select();
+      navigator.clipboard.writeText(linkInput.value);
+      const originalText = copyBtn.textContent;
+      copyBtn.textContent = 'Copied!';
+      copyBtn.classList.add('bg-status-success/20', 'text-status-success');
+      
+      setTimeout(() => {
+        copyBtn.textContent = originalText;
+        copyBtn.classList.remove('bg-status-success/20', 'text-status-success');
+      }, 2000);
+    });
+  }
+</script>

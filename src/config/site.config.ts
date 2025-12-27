@@ -59,7 +59,7 @@ export const siteConfig = {
     enableFAQ: true,
     enableSamples: true,
     enableReferralProgram: false, // Enable in Phase 2
-    enableSMS: false, // Enable when Twilio configured
+    enableSMS: import.meta.env.PUBLIC_SMS_ENABLED === 'true', // Controlled by env var
     maintenanceMode: false,
   },
 } as const;

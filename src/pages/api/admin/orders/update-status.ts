@@ -109,8 +109,8 @@ export const POST: APIRoute = async ({ request, cookies, clientAddress }) => {
     );
   }
 
-  // Send email notification for significant status changes
-  const notifyStatuses = ['in_progress', 'composing', 'recording', 'mixing', 'review', 'completed'];
+  // Send email notification for significant status changes (automatic)
+  const notifyStatuses = ['paid', 'in_progress', 'composing', 'recording', 'mixing', 'review', 'completed', 'delivered'];
   if (notifyStatuses.includes(newStatus)) {
     try {
       const supabase = getServerClient();
@@ -172,24 +172,28 @@ export const POST: APIRoute = async ({ request, cookies, clientAddress }) => {
 // Helper functions for email
 function formatStatus(status: string): string {
   const labels: Record<string, string> = {
+    paid: 'Payment Confirmed',
     in_progress: 'In Progress',
     composing: 'Composing',
     recording: 'Recording',
     mixing: 'Mixing & Mastering',
     review: 'Ready for Review',
     completed: 'Completed',
+    delivered: 'Delivered',
   };
   return labels[status] || status;
 }
 
 function getStatusDescription(status: string): string {
   const descriptions: Record<string, string> = {
+    paid: 'Payment confirmed! Your order is now in our queue and we will begin working on it shortly.',
     in_progress: 'We have started working on your custom song. Our team is reviewing your questionnaire and preparing to create something special for you.',
     composing: 'Our songwriter is now composing the melody and lyrics for your song based on your preferences.',
     recording: 'Your song is being recorded by our talented musicians. The magic is happening!',
     mixing: 'We are now mixing and mastering your song to ensure it sounds perfect.',
     review: 'Your song is ready for your review. Please check your dashboard to listen and provide feedback.',
     completed: 'Your song is complete and ready for download. Thank you for choosing Eventune Studios!',
+    delivered: 'Your song has been delivered! You can now download it from your dashboard.',
   };
   return descriptions[status] || 'Your order status has been updated.';
 }
